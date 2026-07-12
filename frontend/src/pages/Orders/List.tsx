@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button, Select, DateInput, FilterPill, ListLoadingState, ListEmptyState, StatusBadge, TextInput } from '../../components/ui';
+import { cardErrorPadded } from '../../styles/classNames';
 import { Search, Plus, ChevronLeft, ChevronRight, AlertCircle, Filter } from 'lucide-react';
 import { useOrders } from '../../hooks/useOrders';
 import { formatDate } from '../../utils/format';
@@ -92,7 +93,7 @@ export const OrdersListPage: React.FC = () => {
       </div>
 
       {error && (
-        <Card className="bg-error/10 border border-error p-4" padding="lg">
+        <Card className={cardErrorPadded} padding="lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
             <div>

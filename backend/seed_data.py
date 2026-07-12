@@ -266,14 +266,59 @@ def seed_inventory_items():
     print("[+] Inventory items created")
 
 
+def get_or_create_admin():
+    """Ensure at least one admin user exists (for first-time setup)."""
+    print("Checking for Admin user...")
+    
+    admin_role = db.query(Role).filter(Role.name == "Admin").first()
+    admin_user = db.query(User).filter(User.role_id == admin_role.id).first() if admin_role else None
+    
+    if not admin_user:
+        print("[!] No Admin user found. Creating initial admin account...")
+        if not admin_role:
+            admin_role = Role(name="Admin", description="Full system access")
+            db.add(admin_role)
+            db.flush()
+        
+        admin_user = User(
+            full_name="System Administrator",
+            email="admin@localhost",
+            password_hash=hash_password("admin@123"),
+            role_id=admin_role.id,
+            department="Administration"
+        )
+        db.add(admin_user)
+        db.commit()
+        print("[+] Initial Admin user created: admin@localhost / admin@123")
+        return True
+    else:
+        print(f"[✓] Admin user exists: {admin_user.email}")
+        return False
+
+
 def main():
     """Run all seed functions."""
-    print("\n" + "="*50)
-    print("Seeding Cloud9 ERP Database - Phase 1")
-    print("="*50 + "\n")
+    print("\n" + "="*60)
+    print("Cloud9 ERP Database Setup")
+    print("="*60 + "\n")
     
     try:
-        seed_roles_and_permissions()
+        # First ensure an admin exists (for first-time users)
+        admin_created = False
+        try:
+            admin_role = db.query(Role).filter(Role.name == "Admin").first()
+            if not admin_role:
+                print("[*] First-time setup detected. Creating initial role and admin user...")
+                seed_roles_and_permissions()
+                admin_created = get_or_create_admin()
+            else:
+                admin_created = get_or_create_admin()
+        except Exception as e:
+            print(f"[*] Setting up roles and permissions...")
+            seed_roles_and_permissions()
+            admin_created = get_or_create_admin()
+        
+        # Then run standard seed functions
         seed_users()
         seed_settings()
         seed_warehouse_hierarchy()
@@ -281,17 +326,34 @@ def main():
         seed_vendors()
         seed_inventory_items()
         
-        print("\n" + "="*50)
-        print("[+] Database seeding completed successfully!")
-        print("="*50 + "\n")
+        print("\n" + "="*60)
+        print("[+] Database setup completed successfully!")
+        print("="*60 + "\n")
+        
+        if admin_created:
+            print("🔐 FIRST-TIME SETUP - Admin Account Created")
+            print("   Email: admin@localhost")
+            print("   Password: admin@123")
+            print("\n   ⚠️  IMPORTANT: Change this password in Settings after first login!\n")
+        
         print("Test Credentials:")
-        print("  Admin: admin@example.com / admin@123")
-        print("  Manager: manager@example.com / manager123")
-        print("  Warehouse: warehouse@example.com / warehouse123")
+        print("  ├─ Admin: admin@example.com / admin@123")
+        print("  ├─ Manager: manager@example.com / manager123")
+        print("  └─ Warehouse: warehouse@example.com / warehouse123")
+        print("\nAdditional Setup Credentials:")
+        print("  └─ Initial Admin: admin@localhost / admin@123")
+        print()
+        print("Features now available:")
+        print("  ✓ Dashboard & Analytics")
+        print("  ✓ Inventory Management")
+        print("  ✓ Order Management with Approval Matrix")
+        print("  ✓ User & Permission Management")
+        print("  ✓ Warehouse Structure")
+        print("  ✓ Backup & Restore (Admin only)")
         print()
         
     except Exception as e:
-        print(f"\n[-] Error during seeding: {str(e)}")
+        print(f"\n[-] Error during setup: {str(e)}")
         import traceback
         traceback.print_exc()
         db.rollback()

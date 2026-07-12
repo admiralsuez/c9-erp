@@ -16,7 +16,13 @@ export const emptyState = 'text-xs text-neutral-400 p-2';
 
 export const loadingState = 'text-xs text-neutral-400 p-2 text-center';
 
-export const cardError = 'bg-error/10 border border-error/30 rounded-lg p-3';
+export const cardError = 'bg-error/10 border border-error';
+
+export const cardErrorPadded = 'bg-error/10 border border-error p-4';
+
+export const formLabel = 'block text-sm font-medium mb-2 text-neutral-700';
+
+export const errorBlock = 'p-4 bg-error/10 border border-error rounded-lg text-sm text-error';
 
 export const cardWarning = 'bg-warning/10 border border-warning/30 p-4';
 

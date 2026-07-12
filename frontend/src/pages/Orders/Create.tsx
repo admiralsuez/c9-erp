@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button } from '../../components/ui';
+import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { ArrowLeft, Trash2, Loader, AlertCircle, Plus } from 'lucide-react';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { useVendors, useCreateVendor } from '../../hooks/useVendors';
@@ -194,7 +195,7 @@ export const OrderCreatePage: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {formError && (
-          <Card className="bg-error/10 border border-error p-4" padding="lg">
+          <Card className={cardErrorPadded} padding="lg">
             <div className="flex items-center gap-3">
               <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
               <p className="text-error">{formError}</p>
@@ -207,7 +208,7 @@ export const OrderCreatePage: React.FC = () => {
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Vendor Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">
+              <label className={formLabel}>
                 Select Vendor *
               </label>
               {vendorsLoading ? (
@@ -318,7 +319,7 @@ export const OrderCreatePage: React.FC = () => {
 
             {selectedVendor && (
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Vendor Details
                 </label>
                 <div className="bg-neutral-50 rounded-lg p-4">
@@ -343,7 +344,7 @@ export const OrderCreatePage: React.FC = () => {
           <div className="mb-6 pb-6 border-b border-neutral-200">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">Item</label>
+                <label className={formLabel}>Item</label>
                 {inventoryLoading ? (
                   <div className="flex items-center gap-2 text-neutral-500">
                     <Loader className="w-4 h-4 animate-spin" />
@@ -385,7 +386,7 @@ export const OrderCreatePage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">Quantity</label>
+                <label className={formLabel}>Quantity</label>
                 <input
                   type="number"
                   min="1"
@@ -441,7 +442,7 @@ export const OrderCreatePage: React.FC = () => {
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Additional Information</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">
+              <label className={formLabel}>
                 Delivery Address
               </label>
               <label className="flex items-center gap-2 mb-3 cursor-pointer">
@@ -512,7 +513,7 @@ export const OrderCreatePage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">Remarks</label>
+              <label className={formLabel}>Remarks</label>
               <textarea
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}

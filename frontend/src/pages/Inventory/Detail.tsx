@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Button, ListLoadingState, StatusBadge } from '../../components/ui';
+import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { EntityListCard } from '../../components/common/EntityListCard';
 import { formatDate, formatDateTime } from '../../utils/format';
 import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal } from 'lucide-react';
@@ -136,7 +137,7 @@ export const InventoryDetailPage: React.FC = () => {
         >
           <ArrowLeft className="w-5 h-5 text-neutral-600" />
         </button>
-        <Card className="bg-error/10 border border-error p-4" padding="lg">
+        <Card className={cardErrorPadded} padding="lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
             <p className="text-error">
@@ -195,7 +196,7 @@ export const InventoryDetailPage: React.FC = () => {
 
       {/* Error Banner */}
       {formError && (
-        <Card className="bg-error/10 border border-error p-4" padding="lg">
+        <Card className={cardErrorPadded} padding="lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
             <p className="text-error">{formError}</p>
@@ -237,7 +238,7 @@ export const InventoryDetailPage: React.FC = () => {
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Edit Item</h2>
           <form onSubmit={handleUpdate} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">Item Name *</label>
+              <label className={formLabel}>Item Name *</label>
               <input
                 type="text"
                 value={editForm.name}
@@ -247,7 +248,7 @@ export const InventoryDetailPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">Description</label>
+              <label className={formLabel}>Description</label>
               <textarea
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
@@ -257,7 +258,7 @@ export const InventoryDetailPage: React.FC = () => {
               />
             </div>
             <div className="max-w-xs">
-              <label className="block text-sm font-medium mb-2 text-neutral-700">
+              <label className={formLabel}>
                 Minimum Quantity
               </label>
               <input

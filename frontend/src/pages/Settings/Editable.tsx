@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Button, ListLoadingState } from '../../components/ui';
+import { formLabel } from '../../styles/classNames';
 import { X, Plus, Edit2, Trash2, Loader, AlertCircle, Download, Upload } from 'lucide-react';
 import {
   useSettings,
@@ -99,7 +100,7 @@ export const CompanyProfileSection: React.FC = () => {
             ['requisition_number_format', 'Requisition Number Format'],
           ].map(([key, label]) => (
             <div key={key}>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">{label}</label>
+              <label className={formLabel}>{label}</label>
               <input
                 type="text"
                 value={(formData as any)[key]}
@@ -110,7 +111,7 @@ export const CompanyProfileSection: React.FC = () => {
             </div>
           ))}
           <div>
-            <label className="block text-sm font-medium mb-2 text-neutral-700">Default Low Stock Threshold</label>
+            <label className={formLabel}>Default Low Stock Threshold</label>
             <input
               type="number"
               value={formData.default_low_stock_threshold}
@@ -120,7 +121,7 @@ export const CompanyProfileSection: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2 text-neutral-700">Address</label>
+            <label className={formLabel}>Address</label>
             <textarea
               value={formData.company_address}
               onChange={(e) => setFormData({ ...formData, company_address: e.target.value })}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button, TextInput, ListLoadingState, ListEmptyState, StatusBadge } from '../../components/ui';
+import { cardErrorPadded } from '../../styles/classNames';
 import { Search, Plus, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { useVendors } from '../../hooks/useVendors';
 
@@ -45,7 +46,7 @@ export const VendorsListPage: React.FC = () => {
       </div>
 
       {error && (
-        <Card className="bg-error/10 border border-error p-4" padding="lg">
+        <Card className={cardErrorPadded} padding="lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
             <div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, ListLoadingState, ListEmptyState } from '../../components/ui';
+import { cardError } from '../../styles/classNames';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDateTime } from '../../utils/format';
 import { useOrders, useApproveWithSignature } from '../../hooks/useOrders';
@@ -44,7 +45,7 @@ export const ApprovalsPage: React.FC = () => {
       </div>
 
       {error && (
-        <Card className="bg-error/10 border border-error" padding="lg">
+        <Card className={cardError} padding="lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-error" />
             <p className="text-error">Failed to load approvals</p>
@@ -53,7 +54,7 @@ export const ApprovalsPage: React.FC = () => {
       )}
 
       {actionError && (
-        <Card className="bg-error/10 border border-error" padding="lg">
+        <Card className={cardError} padding="lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-error" />
             <p className="text-error">{actionError}</p>

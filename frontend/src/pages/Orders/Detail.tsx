@@ -3,6 +3,7 @@ import { ImageCropModal } from '../../components/ImageCropModal';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Card, Button, ListLoadingState, StatusBadge } from '../../components/ui';
+import { cardError, cardErrorPadded, formLabel } from '../../styles/classNames';
 import {
   ArrowLeft,
   Loader,
@@ -250,7 +251,7 @@ export const OrderDetailPage: React.FC = () => {
         >
           <ArrowLeft className="w-5 h-5 text-neutral-600" />
         </button>
-        <Card className="bg-error/10 border border-error p-4" padding="lg">
+        <Card className={cardErrorPadded} padding="lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
             <p className="text-error">
@@ -477,7 +478,7 @@ export const OrderDetailPage: React.FC = () => {
 
       {/* Error Banner */}
       {actionError && (
-        <Card className="bg-error/10 border border-error" padding="lg">
+        <Card className={cardError} padding="lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
             <p className="text-error">{actionError}</p>
@@ -602,7 +603,7 @@ export const OrderDetailPage: React.FC = () => {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">
+              <label className={formLabel}>
                 Dispatch Challan (PDF/Image)
               </label>
               <input
@@ -672,7 +673,7 @@ export const OrderDetailPage: React.FC = () => {
           <div className="space-y-4">
             {/* Signed challan upload */}
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">
+              <label className={formLabel}>
                 Signed Delivery Challan (PDF/Image) *
               </label>
               <input

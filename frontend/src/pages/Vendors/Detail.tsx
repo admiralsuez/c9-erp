@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Button, ListLoadingState } from '../../components/ui';
+import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { ArrowLeft, Edit2, Trash2, Loader, AlertCircle } from 'lucide-react';
 import { useVendor, useUpdateVendor, useDeleteVendor } from '../../hooks/useVendors';
 import { formatDate } from '../../utils/format';
@@ -108,7 +109,7 @@ export const VendorDetailPage: React.FC = () => {
         >
           <ArrowLeft className="w-5 h-5 text-neutral-600" />
         </button>
-        <Card className="bg-error/10 border border-error p-4" padding="lg">
+        <Card className={cardErrorPadded} padding="lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
             <p className="text-error">
@@ -159,7 +160,7 @@ export const VendorDetailPage: React.FC = () => {
 
       {/* Error Banner */}
       {formError && (
-        <Card className="bg-error/10 border border-error p-4" padding="lg">
+        <Card className={cardErrorPadded} padding="lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
             <p className="text-error">{formError}</p>
@@ -310,7 +311,7 @@ export const VendorDetailPage: React.FC = () => {
           <form onSubmit={handleUpdate} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Vendor Name *
                 </label>
                 <input
@@ -324,7 +325,7 @@ export const VendorDetailPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Vendor Type *
                 </label>
                 <input
@@ -341,7 +342,7 @@ export const VendorDetailPage: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Contact Person
                 </label>
                 <input
@@ -355,7 +356,7 @@ export const VendorDetailPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Phone
                 </label>
                 <input
@@ -371,7 +372,7 @@ export const VendorDetailPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">
+              <label className={formLabel}>
                 Email
               </label>
               <input
@@ -386,7 +387,7 @@ export const VendorDetailPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">
+              <label className={formLabel}>
                 Address
               </label>
               <textarea
@@ -402,7 +403,7 @@ export const VendorDetailPage: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   City
                 </label>
                 <input
@@ -416,7 +417,7 @@ export const VendorDetailPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   State
                 </label>
                 <input
@@ -432,7 +433,7 @@ export const VendorDetailPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">
+              <label className={formLabel}>
                 GST Number
               </label>
               <input
@@ -447,7 +448,7 @@ export const VendorDetailPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">
+              <label className={formLabel}>
                 Notes
               </label>
               <textarea

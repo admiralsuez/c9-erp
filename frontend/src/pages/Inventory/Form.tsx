@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card, Button, Input, Textarea, Select } from '../../components/ui';
+import { formLabel } from '../../styles/classNames';
 import { createItemSchema } from '../../utils/validation';
 import { ArrowLeft } from 'lucide-react';
 import { useCreateInventoryItem } from '../../hooks/useInventory';
@@ -129,7 +130,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2 text-neutral-700">
+              <label className={formLabel}>
                 Description
               </label>
               <Textarea
@@ -186,7 +187,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Unit Cost
                 </label>
                 <div className="relative">
@@ -202,7 +203,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Reorder Quantity
                 </label>
                 <input
@@ -216,7 +217,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Opening Stock Quantity
                 </label>
                 <input
@@ -232,7 +233,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Unit of Measurement
                 </label>
                 <select className="form-input" disabled={isPending}>
@@ -255,7 +256,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Warehouse Location
                 </label>
                 <input
@@ -267,7 +268,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
+                <label className={formLabel}>
                   Primary Supplier
                 </label>
                 <select className="form-input" disabled={isPending}>

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Search, Plus, ChevronLeft, ChevronRight, AlertCircle, Loader } from 'lucide-react';
+import { Card, Button, TextInput, ListLoadingState, ListEmptyState, StatusBadge } from '../../components/ui';
+import { Search, Plus, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { useVendors } from '../../hooks/useVendors';
 
 const VENDORS_PER_PAGE = 20;
@@ -60,33 +59,22 @@ export const VendorsListPage: React.FC = () => {
       )}
 
       <Card padding="lg">
-        <div className="relative">
-          <Search className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
-          <input
-            type="text"
-            placeholder="Search vendors by name, email, or phone..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
+        <TextInput
+          icon={<Search className="w-4 h-4" />}
+          placeholder="Search vendors by name, email, or phone..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setCurrentPage(1);
+          }}
+        />
       </Card>
 
       {/* Vendors List */}
       {isLoading ? (
-        <Card padding="lg" className="flex items-center justify-center min-h-64">
-          <div className="flex flex-col items-center gap-2">
-            <Loader className="w-6 h-6 animate-spin text-primary-600" />
-            <p className="text-neutral-600">Loading vendors...</p>
-          </div>
-        </Card>
+        <ListLoadingState message="Loading vendors..." />
       ) : items.length === 0 ? (
-        <Card padding="lg" className="text-center py-12">
-          <p className="text-neutral-600">No vendors found</p>
-        </Card>
+        <ListEmptyState message="No vendors found" />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {items.map((vendor) => (
@@ -101,9 +89,7 @@ export const VendorsListPage: React.FC = () => {
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="text-lg font-semibold text-neutral-900">{vendor.name}</h3>
                     {vendor.vendor_type && (
-                      <span className="text-xs font-medium px-2 py-1 bg-primary-100 text-primary-700 rounded">
-                        {vendor.vendor_type}
-                      </span>
+                      <StatusBadge status={vendor.vendor_type}>{vendor.vendor_type}</StatusBadge>
                     )}
                   </div>
                   {vendor.contact_person && (
@@ -146,9 +132,7 @@ export const VendorsListPage: React.FC = () => {
 
                 {vendor.is_active !== false && (
                   <div className="pt-2 border-t border-neutral-200">
-                    <span className="text-xs font-medium px-2 py-1 bg-success/10 text-success rounded">
-                      Active
-                    </span>
+                    <StatusBadge status="active">Active</StatusBadge>
                   </div>
                 )}
               </div>

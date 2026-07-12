@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Card, Button, ListLoadingState, StatusBadge } from '../../components/ui';
 import { EntityListCard } from '../../components/common/EntityListCard';
 import { formatDate, formatDateTime } from '../../utils/format';
-import { ArrowLeft, Edit2, Trash2, Plus, Loader, AlertCircle, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal } from 'lucide-react';
 import {
   useInventoryItem,
   useUpdateInventoryItem,
@@ -22,13 +21,6 @@ const getApiError = (error: any, fallback: string): string => {
     return `${detail.message}.${extra}`;
   }
   return error?.message || fallback;
-};
-
-const transactionColors: Record<string, string> = {
-  restock: 'text-success',
-  dispatch: 'text-error',
-  adjustment: 'text-warning',
-  initial: 'text-info',
 };
 
 export const InventoryDetailPage: React.FC = () => {
@@ -133,16 +125,7 @@ export const InventoryDetailPage: React.FC = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="flex flex-col items-center gap-2">
-          <Loader className="w-6 h-6 animate-spin text-primary-600" />
-          <p className="text-neutral-600">Loading item...</p>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <ListLoadingState message="Loading item..." />;
 
   if (error || !item) {
     return (
@@ -449,11 +432,7 @@ export const InventoryDetailPage: React.FC = () => {
                     subtitle={`${tx.transaction_type.toUpperCase()}${tx.reference_type ? ` • ${tx.reference_type} #${tx.reference_id}` : ''}`}
                     description={`${formatDateTime(tx.created_at)}${tx.reason ? ` • ${tx.reason}` : ''}${tx.created_by ? ` • by ${userNames[tx.created_by] || `User #${tx.created_by}`}` : ''}`}
                     trailing={
-                      <span
-                        className={`font-semibold ${transactionColors[tx.transaction_type] || 'text-neutral-700'}`}
-                      >
-                        {tx.transaction_type.toUpperCase()}
-                      </span>
+                      <StatusBadge status={tx.transaction_type}>{tx.transaction_type.toUpperCase()}</StatusBadge>
                     }
                   />
                 ))}

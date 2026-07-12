@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Card, Button, ListLoadingState } from '../../components/ui';
 import { ArrowLeft, Edit2, Trash2, Loader, AlertCircle } from 'lucide-react';
 import { useVendor, useUpdateVendor, useDeleteVendor } from '../../hooks/useVendors';
 import { formatDate } from '../../utils/format';
@@ -98,16 +97,7 @@ export const VendorDetailPage: React.FC = () => {
     });
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="flex flex-col items-center gap-2">
-          <Loader className="w-6 h-6 animate-spin text-primary-600" />
-          <p className="text-neutral-600">Loading vendor...</p>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <ListLoadingState message="Loading vendor..." />;
 
   if (error || !vendor) {
     return (

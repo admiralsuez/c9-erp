@@ -1,8 +1,8 @@
 import React from 'react';
-import { Card } from '../components/ui/Card';
+import { Card, ListLoadingState } from '../components/ui';
 import { StatCard } from '../components/common/StatCard';
 import { EntityListCard } from '../components/common/EntityListCard';
-import { Loader, Package, AlertCircle, Clock, TrendingUp, Lock } from 'lucide-react';
+import { Package, AlertCircle, Clock, TrendingUp, Lock } from 'lucide-react';
 import { useDashboardOverview } from '../hooks/useDashboard';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -29,19 +29,13 @@ export const DashboardPage: React.FC = () => {
     (perm: any) => perm.code === 'dashboard.view'
   ) ?? false;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader className="w-8 h-8 animate-spin text-primary-600" />
-      </div>
-    );
-  }
+  if (isLoading) return <ListLoadingState message="Loading dashboard..." />;
 
   if (!hasDashboardPermission) {
     return (
       <div className="space-y-6 pb-6">
         <h1 className="text-3xl font-bold text-neutral-900">Dashboard</h1>
-        <Card padding="lg" className="bg-warning/10 border border-warning/30">
+        <Card className="bg-warning/10 border border-warning/30" padding="lg">
           <div className="flex items-center gap-3">
             <Lock className="w-5 h-5 text-warning" />
             <div>
@@ -58,7 +52,7 @@ export const DashboardPage: React.FC = () => {
     return (
       <div className="space-y-6 pb-6">
         <h1 className="text-3xl font-bold text-neutral-900">Dashboard</h1>
-        <Card padding="lg" className="bg-error/10 border border-error/30">
+        <Card className="bg-error/10 border border-error/30" padding="lg">
           <p className="text-error">Could not load dashboard data. Please try again or contact support.</p>
         </Card>
       </div>

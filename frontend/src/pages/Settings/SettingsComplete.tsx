@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card } from '../../components/ui/Card';
+import { Card, ListLoadingState } from '../../components/ui';
 import {
   Building2,
   Users,
@@ -10,7 +10,6 @@ import {
   Bell,
   ChevronRight,
   ArrowLeft,
-  Loader,
   HardDrive,
 } from 'lucide-react';
 import {
@@ -194,12 +193,7 @@ const SystemInfoCard: React.FC = () => {
       <h2 className="text-lg font-semibold text-neutral-900 mb-4">
         System Information
       </h2>
-      {isLoading && (
-        <div className="flex items-center gap-2 text-neutral-500 py-2">
-          <Loader className="w-4 h-4 animate-spin" />
-          <span>Loading...</span>
-        </div>
-      )}
+      {isLoading && <ListLoadingState message="Loading system info..." />}
       {error && (
         <p className="text-sm text-error">Could not load system information.</p>
       )}

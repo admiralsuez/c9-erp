@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Card, Button } from '../../components/ui';
 import { ArrowLeft, Loader, AlertCircle } from 'lucide-react';
 import { useCreateVendor } from '../../hooks/useVendors';
 import type { VendorCreateRequest } from '../../api/vendors';

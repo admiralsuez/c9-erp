@@ -2,10 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Textarea } from '../../components/ui/Textarea';
+import { Card, Button, Input, Textarea, Select } from '../../components/ui';
 import { createItemSchema } from '../../utils/validation';
 import { ArrowLeft } from 'lucide-react';
 import { useCreateInventoryItem } from '../../hooks/useInventory';
@@ -151,46 +148,21 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
           </h2>
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
-                  Category
-                </label>
-                <select
-                  {...register('category_id', { valueAsNumber: true })}
-                  className="form-input"
-                  disabled={isPending}
-                >
-                  <option value="">Select Category</option>
-                  {categories.map((cat, idx) => (
-                    <option key={cat} value={idx + 1}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-                {errors.category_id && (
-                  <p className="form-error">{errors.category_id.message as string}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2 text-neutral-700">
-                  Item Type *
-                </label>
-                <select
-                  {...register('item_type')}
-                  className="form-input"
-                  disabled={isPending}
-                >
-                  {itemTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-                {errors.item_type && (
-                  <p className="form-error">{errors.item_type.message as string}</p>
-                )}
-              </div>
+              <Select
+                {...register('category_id', { valueAsNumber: true })}
+                label="Category"
+                placeholder="Select Category"
+                error={errors.category_id?.message as string}
+                disabled={isPending}
+                options={categories.map((cat, idx) => ({ value: idx + 1, label: cat }))}
+              />
+              <Select
+                {...register('item_type')}
+                label="Item Type *"
+                error={errors.item_type?.message as string}
+                disabled={isPending}
+                options={itemTypes}
+              />
             </div>
           </div>
         </Card>

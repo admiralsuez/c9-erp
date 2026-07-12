@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Card, Button } from '../../components/ui';
 import { ArrowLeft, Trash2, Loader, AlertCircle, Plus } from 'lucide-react';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { useVendors, useCreateVendor } from '../../hooks/useVendors';

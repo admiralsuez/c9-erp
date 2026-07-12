@@ -1,0 +1,31 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\vibin\\OneDrive\\Documents\\work\\core\\tech\\c9 erp\\backend']
+C:\Users\vibin\OneDrive\Documents\work\core\tech\c9 erp\backend\app\routers\reports.py:22: FastAPIDeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+  period: str = Query(..., regex="^(weekly|monthly|quarterly)$"),
+C:\Users\vibin\OneDrive\Documents\work\core\tech\c9 erp\backend\app\routers\reports.py:23: FastAPIDeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+  format: str = Query("pdf", regex="^(pdf|excel)$"),
+INFO:main:Starting Cloud9 ERP
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [31616] using StatReload
+C:\Users\vibin\OneDrive\Documents\work\core\tech\c9 erp\backend\app\routers\reports.py:22: FastAPIDeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+  period: str = Query(..., regex="^(weekly|monthly|quarterly)$"),
+C:\Users\vibin\OneDrive\Documents\work\core\tech\c9 erp\backend\app\routers\reports.py:23: FastAPIDeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+  format: str = Query("pdf", regex="^(pdf|excel)$"),
+INFO:main:Starting Cloud9 ERP
+INFO:     Started server process [35328]
+INFO:     Waiting for application startup.
+INFO:main:Database tables created / verified
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app\routers\orders.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [35328]
+C:\Users\vibin\OneDrive\Documents\work\core\tech\c9 erp\backend\app\routers\reports.py:22: FastAPIDeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+  period: str = Query(..., regex="^(weekly|monthly|quarterly)$"),
+C:\Users\vibin\OneDrive\Documents\work\core\tech\c9 erp\backend\app\routers\reports.py:23: FastAPIDeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+  format: str = Query("pdf", regex="^(pdf|excel)$"),
+INFO:main:Starting Cloud9 ERP
+INFO:     Started server process [8072]
+INFO:     Waiting for application startup.
+INFO:main:Database tables created / verified
+INFO:     Application startup complete.

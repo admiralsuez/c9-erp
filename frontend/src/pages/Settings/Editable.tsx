@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Card, Button, ListLoadingState } from '../../components/ui';
 import { X, Plus, Edit2, Trash2, Loader, AlertCircle, Download, Upload } from 'lucide-react';
 import {
   useSettings,
@@ -78,7 +77,7 @@ export const CompanyProfileSection: React.FC = () => {
     });
   };
 
-  if (isLoading) return <Card padding="lg"><Loader className="w-5 h-5 animate-spin" /></Card>;
+  if (isLoading) return <ListLoadingState message="Loading company profile..." />;
   if (error) return <Card padding="lg"><ErrorMessage message="Could not load company settings." /></Card>;
 
   if (isEditing) {

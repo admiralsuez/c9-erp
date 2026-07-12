@@ -62,3 +62,8 @@ logs/
 
 
 *.pdf
+
+*.png
+*.jpg
+*.jpeg
+*.xls

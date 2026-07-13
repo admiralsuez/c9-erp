@@ -101,6 +101,7 @@ async def health_check():
 
 # Include routers
 from app.routers import auth, users, settings as settings_router, vendors, inventory, warehouse, audit, orders, approval_rules, documents, vendor_portal, analytics, health, notifications, reports, backup
+from app.api.routes import inventory_images, inventory_serials
 
 app.include_router(health.router)
 app.include_router(auth.router)
@@ -108,6 +109,8 @@ app.include_router(users.router)
 app.include_router(settings_router.router)
 app.include_router(vendors.router)
 app.include_router(inventory.router)
+app.include_router(inventory_images.router)
+app.include_router(inventory_serials.router)
 app.include_router(warehouse.router)
 app.include_router(audit.router)
 app.include_router(orders.router)

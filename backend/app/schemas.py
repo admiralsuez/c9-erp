@@ -273,7 +273,64 @@ class InventoryItemResponse(InventoryItemBase):
 
 class InventoryItemDetailResponse(InventoryItemResponse):
     transactions: List[InventoryTransactionResponse] = []
+    images: List['InventoryItemImageResponse'] = []
+    serial_numbers: List['SerialNumberResponse'] = []
 
+
+# ============ INVENTORY ITEM IMAGES ============
+class InventoryItemImageResponse(BaseModel):
+    id: int
+    item_id: int
+    image_type: str
+    image_url: str
+    uploaded_by: Optional[int] = None
+    uploaded_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryItemImageCreate(BaseModel):
+    image_type: str
+
+
+# ============ SERIAL NUMBERS ============
+class SerialNumberResponse(BaseModel):
+    id: int
+    item_id: int
+    serial_number: str
+    batch_id: Optional[str] = None
+    unit_condition: str = "new"
+    location_bin_id: Optional[int] = None
+    assigned_to_order_id: Optional[int] = None
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SerialNumberCreate(BaseModel):
+    serial_number: str
+    batch_id: Optional[str] = None
+    unit_condition: str = "new"
+    location_bin_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class SerialNumberBatchCreate(BaseModel):
+    start: int | str
+    end: int | str
+    prefix: Optional[str] = None
+    suffix: Optional[str] = None
+    batch_id: Optional[str] = None
+    unit_condition: str = "new"
+
+
+class SerialNumberUpdate(BaseModel):
+    unit_condition: Optional[str] = None
+    location_bin_id: Optional[int] = None
+    assigned_to_order_id: Optional[int] = None
+    notes: Optional[str] = None
 
 # ============ RESTOCK & ADJUST ============
 class RestockRequest(BaseModel):

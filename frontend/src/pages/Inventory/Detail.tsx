@@ -4,7 +4,9 @@ import { Card, Button, ListLoadingState, StatusBadge } from '../../components/ui
 import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { EntityListCard } from '../../components/common/EntityListCard';
 import { formatDate, formatDateTime } from '../../utils/format';
-import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal, Loader } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal, Loader, Barcode } from 'lucide-react';
+import { SerialNumberInput } from '../../components/inventory/SerialNumberInput';
+import { SerialNumberImport } from '../../components/inventory/SerialNumberImport';
 import {
   useInventoryItem,
   useUpdateInventoryItem,
@@ -40,6 +42,8 @@ export const InventoryDetailPage: React.FC = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [formError, setFormError] = useState('');
   const [editForm, setEditForm] = useState({ name: '', description: '', minimum_quantity: 0 });
+  const [showSerialMgmt, setShowSerialMgmt] = useState(false);
+  const [serialMgmtMode, setSerialMgmtMode] = useState<'generate' | 'import'>('generate');
 
   // Restock / Adjust forms
   const [stockAction, setStockAction] = useState<'restock' | 'adjust' | null>(null);
@@ -182,6 +186,13 @@ export const InventoryDetailPage: React.FC = () => {
             >
               <Edit2 className="w-4 h-4" />
               Edit
+            </Button>
+            <Button
+              onClick={() => setShowSerialMgmt(true)}
+              className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
+            >
+              <Barcode className="w-4 h-4" />
+              Manage Serials
             </Button>
             <Button
               onClick={() => setDeleteConfirm(true)}
@@ -440,6 +451,141 @@ export const InventoryDetailPage: React.FC = () => {
               </div>
             )}
           </Card>
+
+          {/* Serial Management Modal */}
+          {showSerialMgmt && (
+            <Card padding="lg" className="border-2 border-blue-500">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-semibold text-neutral-900">Manage Serial Numbers</h2>
+                <button
+                  onClick={() => {
+                    setShowSerialMgmt(false);
+                    setSerialMgmtMode('generate');
+                  }}
+                  className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Mode Tabs */}
+              <div className="flex gap-4 mb-6 border-b border-gray-300">
+                <button
+                  onClick={() => setSerialMgmtMode('generate')}
+                  className={`px-4 py-3 font-medium border-b-2 transition ${
+                    serialMgmtMode === 'generate'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Generate New Serials
+                </button>
+                <button
+                  onClick={() => setSerialMgmtMode('import')}
+                  className={`px-4 py-3 font-medium border-b-2 transition ${
+                    serialMgmtMode === 'import'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Import Existing Serials
+                </button>
+              </div>
+
+              {/* Generate Mode */}
+              {serialMgmtMode === 'generate' && itemId && (
+                <SerialNumberInput
+                  itemId={itemId}
+                  onSerialsGenerated={() => {
+                    setShowSerialMgmt(false);
+                    // Optionally refetch item data to update serial list
+                  }}
+                  disabled={false}
+                />
+              )}
+
+              {/* Import Mode */}
+              {serialMgmtMode === 'import' && itemId && (
+                <SerialNumberImport
+                  itemId={itemId}
+                  onSerialsImported={() => {
+                    setShowSerialMgmt(false);
+                    // Optionally refetch item data to update serial list
+                  }}
+                  disabled={false}
+                />
+              )}
+            </Card>
+          )}
+
+          {/* Item Images */}
+          {item.images && item.images.length > 0 && (
+            <Card padding="lg">
+              <h3 className="text-lg font-semibold text-neutral-900 mb-4">Item Images</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {item.images.map((img: any) => (
+                  <div key={img.id}>
+                    <p className="text-sm text-neutral-600 font-medium mb-2 capitalize">{img.image_type} Image</p>
+                    <img
+                      src={img.image_url}
+                      alt={`${item.name} - ${img.image_type}`}
+                      className="w-full h-48 object-cover rounded-lg border border-neutral-200"
+                    />
+                    <p className="text-xs text-neutral-500 mt-2">Uploaded {formatDate(img.uploaded_at)}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Serial Numbers */}
+          {item.serial_numbers && item.serial_numbers.length > 0 && (
+            <Card padding="lg">
+              <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+                Serial Numbers ({item.serial_numbers.length})
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-neutral-200">
+                      <th className="text-left px-4 py-2 font-medium text-neutral-700">Serial Number</th>
+                      <th className="text-left px-4 py-2 font-medium text-neutral-700">Batch ID</th>
+                      <th className="text-left px-4 py-2 font-medium text-neutral-700">Condition</th>
+                      <th className="text-left px-4 py-2 font-medium text-neutral-700">Assigned Order</th>
+                      <th className="text-left px-4 py-2 font-medium text-neutral-700">Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {item.serial_numbers.map((serial: any) => (
+                      <tr key={serial.id} className="border-b border-neutral-200 hover:bg-neutral-50">
+                        <td className="px-4 py-2 font-mono text-neutral-900">{serial.serial_number}</td>
+                        <td className="px-4 py-2 text-neutral-700">{serial.batch_id || '—'}</td>
+                        <td className="px-4 py-2">
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium capitalize ${
+                              serial.unit_condition === 'new'
+                                ? 'bg-green-100 text-green-800'
+                                : serial.unit_condition === 'used'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : serial.unit_condition === 'damaged'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
+                            {serial.unit_condition}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-neutral-700">
+                          {serial.assigned_to_order_id ? `Order #${serial.assigned_to_order_id}` : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-neutral-600">{formatDate(serial.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
         </>
       )}
     </div>

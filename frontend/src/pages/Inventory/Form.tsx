@@ -3,9 +3,11 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card, Button, Input, Textarea, Select } from '../../components/ui';
+import { ImageUpload } from '../../components/inventory/ImageUpload';
+import { SerialNumberInput } from '../../components/inventory/SerialNumberInput';
 import { formLabel } from '../../styles/classNames';
 import { createItemSchema } from '../../utils/validation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { useCreateInventoryItem } from '../../hooks/useInventory';
 import type { InventoryItemCreateRequest } from '../../api/inventory';
 
@@ -14,7 +16,7 @@ interface InventoryFormProps {
   itemId?: number;
 }
 
-const categories = ['Furniture', 'Supplies', 'Lighting', 'Electronics', 'Tools'];
+const DEFAULT_CATEGORIES = ['Furniture', 'Supplies', 'Lighting', 'Electronics', 'Tools'];
 const itemTypes = [
   { value: 'consumable', label: 'Consumable (Single-use)' },
   { value: 'returnable', label: 'Returnable (Multi-use)' },
@@ -23,9 +25,23 @@ const itemTypes = [
 export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false }) => {
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<{ front?: string; back?: string }>({});
+  const [generatedSerials, setGeneratedSerials] = useState<any[]>([]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
+  const [notifyLowStock, setNotifyLowStock] = useState(false);
   const { mutate: createItem, isPending } = useCreateInventoryItem((item) => {
     navigate(`/inventory/${item.id}`);
   });
+
+  const handleAddCategory = () => {
+    if (newCategory.trim() && !categories.includes(newCategory)) {
+      setCategories([...categories, newCategory]);
+      setNewCategory('');
+      setShowAddCategory(false);
+    }
+  };
 
   const {
     register,
@@ -149,14 +165,37 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
           </h2>
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Select
-                {...register('category_id', { valueAsNumber: true })}
-                label="Category"
-                placeholder="Select Category"
-                error={errors.category_id?.message as string}
-                disabled={isPending}
-                options={categories.map((cat, idx) => ({ value: idx + 1, label: cat }))}
-              />
+              <div>
+                <label className={formLabel}>Category</label>
+                <div className="flex gap-2">
+                  <select
+                    {...register('category_id', { valueAsNumber: true })}
+                    placeholder="Select Category"
+                    disabled={isPending || showAddCategory}
+                    className="flex-1 form-input"
+                  >
+                    <option value="0">Select Category</option>
+                    {categories.map((cat, idx) => (
+                      <option key={idx} value={idx + 1}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCategory(!showAddCategory)}
+                    className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:bg-gray-400"
+                    disabled={isPending}
+                    title="Add new category"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+                {errors.category_id && (
+                  <p className="form-error mt-1">{errors.category_id.message as string}</p>
+                )}
+              </div>
+
               <Select
                 {...register('item_type')}
                 label="Item Type *"
@@ -165,7 +204,64 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
                 options={itemTypes}
               />
             </div>
+
+            {/* Add Category Modal */}
+            {showAddCategory && (
+              <div className="p-4 bg-primary-50 border-2 border-primary-200 rounded-lg space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">
+                    New Category Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    placeholder="e.g., Office Equipment"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleAddCategory();
+                      }
+                    }}
+                    className="w-full form-input"
+                    disabled={isPending}
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddCategory(false);
+                      setNewCategory('');
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                    disabled={isPending}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddCategory}
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:bg-gray-400 flex items-center gap-2"
+                    disabled={isPending || !newCategory.trim()}
+                  >
+                    <Plus size={16} />
+                    Add Category
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
+        </Card>
+
+        {/* Section 2.5: Item Images */}
+        <Card padding="lg">
+          <ImageUpload
+            onImageUpload={(type, url) => {
+              setUploadedImages((prev) => ({ ...prev, [type]: url }));
+            }}
+            disabled={isPending}
+          />
         </Card>
 
         {/* Section 3: Stock Management */}
@@ -173,77 +269,48 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">
             Stock Management
           </h2>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-6">
+            {/* Available Quantity & Safety Stock */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Input
+                  {...register('opening_quantity', { valueAsNumber: true })}
+                  type="number"
+                  label="Available Quantity *"
+                  placeholder="e.g., 45"
+                  error={errors.opening_quantity?.message as string}
+                  disabled={isPending}
+                  helperText="Initial stock level for this item"
+                />
+              </div>
+
               <div>
                 <Input
                   {...register('minimum_quantity', { valueAsNumber: true })}
                   type="number"
-                  label="Minimum Quantity"
+                  label="Safety Stock *"
                   placeholder="e.g., 10"
                   error={errors.minimum_quantity?.message as string}
                   disabled={isPending}
-                />
-              </div>
-
-              <div>
-                <label className={formLabel}>
-                  Unit Cost
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-10 text-neutral-600">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    className="form-input pl-8"
-                    disabled={isPending}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={formLabel}>
-                  Reorder Quantity
-                </label>
-                <input
-                  type="number"
-                  placeholder="e.g., 50"
-                  className="form-input"
-                  disabled={isPending}
+                  helperText="Minimum stock level to maintain"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className={formLabel}>
-                  Opening Stock Quantity
-                </label>
-                <input
-                  {...register('opening_quantity', { valueAsNumber: true })}
-                  type="number"
-                  placeholder="e.g., 45"
-                  className="form-input"
-                  disabled={isPending}
-                />
-                {errors.opening_quantity && (
-                  <p className="form-error">{errors.opening_quantity.message as string}</p>
-                )}
-              </div>
-
-              <div>
-                <label className={formLabel}>
-                  Unit of Measurement
-                </label>
-                <select className="form-input" disabled={isPending}>
-                  <option value="units">Units</option>
-                  <option value="boxes">Boxes</option>
-                  <option value="kg">Kilograms</option>
-                  <option value="liters">Liters</option>
-                  <option value="meters">Meters</option>
-                </select>
-              </div>
+            {/* Notification Checkbox */}
+            <div className="flex items-start gap-3 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+              <input
+                type="checkbox"
+                id="notify_low_stock"
+                checked={notifyLowStock}
+                onChange={(e) => setNotifyLowStock(e.target.checked)}
+                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-2 focus:ring-primary-500 mt-1 flex-shrink-0"
+                disabled={isPending}
+              />
+              <label htmlFor="notify_low_stock" className="text-sm text-neutral-700 flex-1">
+                <span className="font-medium block mb-1">Notify me when stock falls below safety stock</span>
+                <span className="text-neutral-600">Receive alerts when inventory reaches the safety stock level</span>
+              </label>
             </div>
           </div>
         </Card>
@@ -282,34 +349,23 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
           </div>
         </Card>
 
-        {/* Section 5: Additional Settings */}
-        <Card padding="lg">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4">
-            Additional Settings
-          </h2>
+        {/* Section 5: Serial Number Tracking (Optional - After Item Creation) */}
+        <Card padding="lg" className="border-2 border-dashed border-neutral-300">
           <div className="space-y-4">
-            <div className="flex items-center gap-4">
-              <input
-                type="checkbox"
-                id="trackable"
-                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-2 focus:ring-primary-500"
-                disabled={isPending}
-              />
-              <label htmlFor="trackable" className="text-sm text-neutral-700">
-                Enable tracking for this item (recommended for returnable items)
-              </label>
+            <div>
+              <h2 className="text-lg font-semibold text-neutral-900 mb-2">
+                Serial Number Tracking (Optional)
+              </h2>
+              <p className="text-sm text-neutral-600">
+                Add or generate serial numbers for this item after creation. You can:
+              </p>
+              <ul className="text-sm text-neutral-600 list-disc list-inside mt-2 space-y-1">
+                <li>Generate new serial numbers (single units or ranges like SN1000-SN1099)</li>
+                <li>Add existing serial numbers that products already have</li>
+              </ul>
             </div>
-
-            <div className="flex items-center gap-4">
-              <input
-                type="checkbox"
-                id="notify"
-                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-2 focus:ring-primary-500"
-                disabled={isPending}
-              />
-              <label htmlFor="notify" className="text-sm text-neutral-700">
-                Notify me when stock falls below minimum
-              </label>
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+              <strong>Tip:</strong> Create the item first, then manage serial numbers from the item detail page
             </div>
           </div>
         </Card>

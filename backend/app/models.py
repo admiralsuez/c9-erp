@@ -226,6 +226,8 @@ class InventoryItem(Base):
     category = relationship("InventoryCategory", back_populates="items")
     bin = relationship("WarehouseBin", back_populates="inventory_items")
     transactions = relationship("InventoryTransaction", back_populates="item")
+    images = relationship("InventoryItemImage", back_populates="item", cascade="all, delete-orphan")
+    serial_numbers = relationship("SerialNumber", back_populates="item", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("idx_inventory_sku", "sku"),
@@ -258,6 +260,54 @@ class InventoryTransaction(Base):
     __table_args__ = (
         Index("idx_txn_item", "item_id"),
         Index("idx_txn_created_at", "created_at"),
+    )
+
+
+# ============ INVENTORY ITEM IMAGES ============
+class InventoryItemImage(Base):
+    __tablename__ = "inventory_item_images"
+    
+    id = Column(Integer, primary_key=True)
+    item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
+    image_type = Column(String(20), nullable=False)  # "front" | "back"
+    image_url = Column(String(500), nullable=False)  # DigitalOcean Spaces URL
+    uploaded_by = Column(Integer, ForeignKey("users.id"))
+    uploaded_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    
+    item = relationship("InventoryItem", back_populates="images")
+    uploader = relationship("User")
+    
+    __table_args__ = (
+        Index("idx_item_image_item", "item_id"),
+        Index("idx_item_image_type", "image_type"),
+    )
+
+
+# ============ SERIAL NUMBERS ============
+class SerialNumber(Base):
+    __tablename__ = "serial_numbers"
+    
+    id = Column(Integer, primary_key=True)
+    item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
+    serial_number = Column(String(255), nullable=False)  # e.g., "FRIDGE-001-SN001" or "RB-200"
+    batch_id = Column(String(100))  # e.g., "RB-2024-BATCH1" for ranges
+    unit_condition = Column(String(30), default="new")  # "new" | "used" | "damaged" | "refurbished"
+    location_bin_id = Column(Integer, ForeignKey("warehouse_bins.id"))  # Where this specific unit is stored
+    assigned_to_order_id = Column(Integer, ForeignKey("orders.id"))  # null if in stock, populated if dispatched
+    notes = Column(Text)  # Additional notes about this unit
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    
+    item = relationship("InventoryItem", back_populates="serial_numbers")
+    location_bin = relationship("WarehouseBin")
+    assigned_order = relationship("Order")
+    
+    __table_args__ = (
+        Index("idx_serial_item", "item_id"),
+        Index("idx_serial_number", "serial_number"),
+        Index("idx_serial_batch", "batch_id"),
+        Index("idx_serial_order", "assigned_to_order_id"),
+        Index("idx_serial_condition", "unit_condition"),
     )
 
 

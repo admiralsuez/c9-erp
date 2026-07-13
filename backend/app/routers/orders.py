@@ -272,6 +272,7 @@ def create_order(
 @router.get("")
 def list_orders(
     status: str = Query(None),
+    status_not: str = Query(None),
     vendor_id: int = Query(None),
     search: str = Query(None),
     date_from: str = Query(None),
@@ -288,6 +289,9 @@ def list_orders(
     if status:
         query = query.filter(Order.status == status)
     
+    if status_not:
+        excluded = [s.strip() for s in status_not.split(",")]
+        query = query.filter(~Order.status.in_(excluded))
     if vendor_id:
         query = query.filter(Order.vendor_id == vendor_id)
     

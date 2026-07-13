@@ -44,7 +44,7 @@ const formatStatus = (status: string) =>
 export const OrdersListPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('open');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -58,11 +58,12 @@ export const OrdersListPage: React.FC = () => {
   const { data, isLoading, error } = useOrders(
     currentPage,
     ORDERS_PER_PAGE,
-    selectedStatus === 'all' ? undefined : selectedStatus,
+    selectedStatus === 'all' || selectedStatus === 'open' ? undefined : selectedStatus,
     searchQuery || undefined,
     dateFrom || undefined,
     dateTo || undefined,
-    sortBy
+    sortBy,
+    selectedStatus === 'open' ? 'closed,cancelled' : undefined
   );
 
   const items = data?.items ?? [];
@@ -121,10 +122,10 @@ export const OrdersListPage: React.FC = () => {
 
           {/* Quick Filters */}
           <div className="flex flex-wrap gap-2">
-            <FilterPill active={selectedStatus === 'all' && !(dateFrom === '' && dateTo === '')} onClick={() => { setSelectedStatus('all'); setCurrentPage(1); }}>
+            <FilterPill active={selectedStatus === 'all'} onClick={() => { setSelectedStatus('all'); setCurrentPage(1); }}>
               All Orders
             </FilterPill>
-            <FilterPill active={selectedStatus === 'all' && dateFrom === '' && dateTo === ''} onClick={() => { setSelectedStatus('all'); setCurrentPage(1); }}>
+            <FilterPill active={selectedStatus === 'open'} onClick={() => { setSelectedStatus('open'); setCurrentPage(1); }}>
               Open Orders
             </FilterPill>
             <FilterPill active={selectedStatus === 'closed'} onClick={() => { setSelectedStatus('closed'); setCurrentPage(1); }}>
@@ -133,27 +134,25 @@ export const OrdersListPage: React.FC = () => {
           </div>
 
           {/* Sort and Filter Controls */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
-              <Select
-                label="Sort By"
-                value={sortBy}
-                onChange={(e) => {
-                  setSortBy(e.target.value);
-                  setCurrentPage(1);
-                }}
-                options={[
-                  { value: 'recent_activity', label: 'Most Recent Activity' },
-                  { value: 'created_date', label: 'Most Recently Created' },
-                ]}
-              />
-            </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-neutral-500 whitespace-nowrap">Sort:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="text-sm px-2 py-1 border border-neutral-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+            >
+              <option value="recent_activity">Most Recent Activity</option>
+              <option value="created_date">Most Recently Created</option>
+            </select>
             <button
               type="button"
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 text-sm font-medium text-neutral-600 hover:text-primary-600 transition-colors pt-6"
+              className="flex items-center gap-1.5 text-xs font-medium text-neutral-600 hover:text-primary-600 transition-colors ml-auto"
             >
-              <Filter className="w-4 h-4" />
+              <Filter className="w-3.5 h-3.5" />
               {showFilters ? 'Hide Advanced Filters' : 'Show Advanced Filters'}
             </button>
           </div>

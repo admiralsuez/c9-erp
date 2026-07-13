@@ -70,6 +70,7 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     id: int
+    email: str
     role: Optional[RoleSchema] = None
     is_active: bool
     created_at: datetime

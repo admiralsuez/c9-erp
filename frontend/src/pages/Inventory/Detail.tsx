@@ -4,7 +4,7 @@ import { Card, Button, ListLoadingState, StatusBadge } from '../../components/ui
 import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { EntityListCard } from '../../components/common/EntityListCard';
 import { formatDate, formatDateTime } from '../../utils/format';
-import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal, Loader } from 'lucide-react';
 import {
   useInventoryItem,
   useUpdateInventoryItem,

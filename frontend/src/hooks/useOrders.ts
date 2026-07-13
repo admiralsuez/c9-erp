@@ -3,10 +3,10 @@ import toast from 'react-hot-toast';
 import { ordersApi } from '../api/orders';
 import type { DispatchRequestBody, OrderResponse } from '../api/orders';
 
-export const useOrders = (page: number = 1, size: number = 20, status?: string, search?: string, date_from?: string, date_to?: string, sort_by?: string) => {
+export const useOrders = (page: number = 1, size: number = 20, status?: string, search?: string, date_from?: string, date_to?: string, sort_by?: string, status_not?: string) => {
   return useQuery({
-    queryKey: ['orders', page, size, status, search, date_from, date_to, sort_by],
-    queryFn: () => ordersApi.list(page, size, status, search, date_from, date_to, sort_by),
+    queryKey: ['orders', page, size, status, search, date_from, date_to, sort_by, status_not],
+    queryFn: () => ordersApi.list(page, size, status, search, date_from, date_to, sort_by, status_not),
   });
 };
 

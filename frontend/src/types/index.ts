@@ -4,6 +4,7 @@ export interface User {
   full_name: string;
   email: string;
   role_id: number;
+  role?: Role & { permissions?: Permission[] };
   department?: string;
   is_active: boolean;
   created_at: string;

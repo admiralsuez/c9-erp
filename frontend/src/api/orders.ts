@@ -81,13 +81,17 @@ export const ordersApi = {
     search?: string,
     date_from?: string,
     date_to?: string,
-    sort_by?: string
+    sort_by?: string,
+    status_not?: string
   ): Promise<PaginatedResponse<OrderResponse>> => {
     const params = new URLSearchParams();
     params.append('page', page.toString());
     params.append('size', size.toString());
     if (status) {
       params.append('status', status);
+    }
+    if (status_not) {
+      params.append('status_not', status_not);
     }
     if (search) {
       params.append('search', search);

@@ -120,6 +120,7 @@ class VendorBase(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+    pincode: Optional[str] = None
     gst: Optional[str] = None
     notes: Optional[str] = None
 
@@ -137,6 +138,7 @@ class VendorUpdate(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+    pincode: Optional[str] = None
     gst: Optional[str] = None
     notes: Optional[str] = None
 
@@ -224,10 +226,29 @@ class InventoryItemBase(BaseModel):
     bin_id: Optional[int] = None
     description: Optional[str] = None
     image_url: Optional[str] = None
+    parent_id: Optional[int] = None
 
 
 class InventoryItemCreate(InventoryItemBase):
     current_quantity: float = 0
+
+
+class InventoryItemChildCreate(BaseModel):
+    name: str
+    sku: str
+    barcode: Optional[str] = None
+    item_type: str = "consumable"
+    current_quantity: float = 0
+    minimum_quantity: float = 0
+    description: Optional[str] = None
+    primary_attribute: Optional[str] = None
+    secondary_attribute: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class InventoryItemBatchCreate(BaseModel):
+    parent: InventoryItemCreate
+    children: List[InventoryItemChildCreate] = []
 
 
 class InventoryItemUpdate(BaseModel):
@@ -238,6 +259,7 @@ class InventoryItemUpdate(BaseModel):
     bin_id: Optional[int] = None
     description: Optional[str] = None
     image_url: Optional[str] = None
+    parent_id: Optional[int] = None
 
 
 class InventoryTransactionResponse(BaseModel):
@@ -262,6 +284,7 @@ class InventoryItemResponse(InventoryItemBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    children: List['InventoryItemResponse'] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -275,6 +298,7 @@ class InventoryItemDetailResponse(InventoryItemResponse):
     transactions: List[InventoryTransactionResponse] = []
     images: List['InventoryItemImageResponse'] = []
     serial_numbers: List['SerialNumberResponse'] = []
+    parent: Optional['InventoryItemResponse'] = None
 
 
 # ============ INVENTORY ITEM IMAGES ============
@@ -310,20 +334,23 @@ class SerialNumberResponse(BaseModel):
 
 
 class SerialNumberCreate(BaseModel):
-    serial_number: str
+    count: int = 1
+    base_serial: Optional[str] = None
     batch_id: Optional[str] = None
-    unit_condition: str = "new"
-    location_bin_id: Optional[int] = None
-    notes: Optional[str] = None
+    condition: str = "new"
 
 
 class SerialNumberBatchCreate(BaseModel):
-    start: int | str
-    end: int | str
-    prefix: Optional[str] = None
-    suffix: Optional[str] = None
+    start_serial: str
+    end_serial: str
     batch_id: Optional[str] = None
-    unit_condition: str = "new"
+    condition: str = "new"
+
+
+class SerialNumberImportCreate(BaseModel):
+    serials: List[str]
+    batch_id: Optional[str] = None
+    condition: str = "new"
 
 
 class SerialNumberUpdate(BaseModel):
@@ -382,6 +409,7 @@ class AuditLogResponse(BaseModel):
 class OrderItemCreateRequest(BaseModel):
     item_id: int
     quantity_ordered: float
+    serial_ids: Optional[List[int]] = None
 
 
 class OrderItemResponse(BaseModel):

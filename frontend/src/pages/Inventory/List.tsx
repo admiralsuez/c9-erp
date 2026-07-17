@@ -8,9 +8,10 @@ import type { InventoryItemResponse } from '../../api/inventory';
 
 const ITEMS_PER_PAGE = 20;
 
-type InventoryStatus = 'in_stock' | 'low_stock' | 'out_of_stock';
+type InventoryStatus = 'parent' | 'in_stock' | 'low_stock' | 'out_of_stock';
 
 const getStatus = (item: InventoryItemResponse): InventoryStatus => {
+  if (item.children && item.children.length > 0) return 'parent';
   if (Number(item.current_quantity) === 0) return 'out_of_stock';
   if (Number(item.current_quantity) <= Number(item.minimum_quantity)) return 'low_stock';
   return 'in_stock';
@@ -36,9 +37,14 @@ export const InventoryListPage: React.FC = () => {
   );
 
   const items = data?.items ?? [];
+  // Separate parent items (with children), standalone items, and variants
+  const parentItems = items.filter(i => !i.parent_id && i.children && i.children.length > 0);
+  const standaloneItems = items.filter(i => !i.parent_id && (!i.children || i.children.length === 0));
+  // Flatten for status filtering
+  const displayItems = [...parentItems, ...standaloneItems];
   const filteredItems = selectedStatus === 'all'
-    ? items
-    : items.filter((item) => getStatus(item) === selectedStatus);
+    ? displayItems
+    : displayItems.filter((item) => getStatus(item) === selectedStatus);
   const totalPages = data?.pages ?? 1;
   const totalItems = data?.total ?? 0;
 
@@ -138,35 +144,72 @@ export const InventoryListPage: React.FC = () => {
         <div className="space-y-3">
           {filteredItems.map((item) => {
             const status = getStatus(item);
+            const children = item.children || [];
+            const isParent = children.length > 0;
+            const totalChildStock = children.reduce((sum, c) => sum + Number(c.current_quantity), 0);
             return (
-              <Card
-                key={item.id}
-                padding="md"
-                className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(`/inventory/${item.id}`)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <h3 className="font-medium text-neutral-900">{item.name}</h3>
-                        <p className="text-sm text-neutral-500">SKU: {item.sku}</p>
+              <div key={item.id}>
+                {/* Parent or standalone item */}
+                <Card
+                  padding="md"
+                  className={`cursor-pointer hover:shadow-md transition-shadow ${isParent ? 'border-primary-200 bg-primary-50/50' : ''}`}
+                  onClick={() => navigate(`/inventory/${item.id}`)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <h3 className="font-medium text-neutral-900">
+                            {item.name}
+                            {isParent && <span className="ml-2 text-xs text-primary-600 font-normal">(Parent Product)</span>}
+                          </h3>
+                          <p className="text-sm text-neutral-500">SKU: {item.sku}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4 text-right">
-                    <div>
-                      <p className="font-semibold text-neutral-900">
-                        {Number(item.current_quantity)}
-                      </p>
-                      <p className="text-sm text-neutral-500">
-                        Min: {Number(item.minimum_quantity)}
-                      </p>
+                    <div className="flex items-center gap-4 text-right">
+                      <div>
+                        <p className="font-semibold text-neutral-900">
+                          {isParent ? `${totalChildStock} (across ${children.length} variants)` : Number(item.current_quantity)}
+                        </p>
+                        <p className="text-sm text-neutral-500">{children.length > 0 ? `${children.length} variant(s)` : `Min: ${Number(item.minimum_quantity)}`}</p>
+                      </div>
+                      <StatusBadge status={status}>{getStatusLabel(status)}</StatusBadge>
                     </div>
-                    <StatusBadge status={status}>{getStatusLabel(status)}</StatusBadge>
                   </div>
-                </div>
-              </Card>
+                </Card>
+
+                {/* Children variants indented under parent */}
+                {isParent && (
+                  <div className="ml-6 mt-1 space-y-1 border-l-2 border-primary-200 pl-3">
+                    {children.map((child) => {
+                      const childStatus = getStatus(child);
+                      return (
+                        <Card
+                          key={child.id}
+                          padding="sm"
+                          className="cursor-pointer hover:shadow-sm transition-shadow"
+                          onClick={() => navigate(`/inventory/${child.id}`)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h4 className="text-sm font-medium text-neutral-900">{child.name}</h4>
+                              <p className="text-xs text-neutral-500">SKU: {child.sku}</p>
+                            </div>
+                            <div className="flex items-center gap-3 text-right">
+                              <div>
+                                <p className="text-sm font-semibold text-neutral-900">{Number(child.current_quantity)}</p>
+                                <p className="text-xs text-neutral-500">Min: {Number(child.minimum_quantity)}</p>
+                              </div>
+                              <StatusBadge status={childStatus}>{getStatusLabel(childStatus)}</StatusBadge>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>

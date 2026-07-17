@@ -1,18 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { Card, Button } from '../../components/ui';
-import { cardErrorPadded, formLabel } from '../../styles/classNames';
-import { ArrowLeft, Trash2, Loader, AlertCircle, Plus } from 'lucide-react';
+import { formLabel } from '../../styles/classNames';
+import { ArrowLeft, Trash2, Loader, Plus, Info } from 'lucide-react';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { useVendors, useCreateVendor } from '../../hooks/useVendors';
 import { useInventory } from '../../hooks/useInventory';
-import type { OrderCreateRequest } from '../../api/orders';
+import { inventoryApi } from '../../api/inventory';
+import type { OrderCreateRequest, OrderItemRequest } from '../../api/orders';
+import type { SerialNumberResponse, InventoryItemResponse } from '../../api/inventory';
 
-interface LocalOrderItem {
+interface LocalOrderItem extends OrderItemRequest {
   id: string;
-  item_id: number;
   item_name: string;
-  quantity_ordered: number;
+  variant_name?: string;
+  serial_labels?: string[];
 }
 
 export const OrderCreatePage: React.FC = () => {
@@ -25,14 +28,20 @@ export const OrderCreatePage: React.FC = () => {
   const [deliveryAddressText, setDeliveryAddressText] = useState('');
   const [deliveryPincode, setDeliveryPincode] = useState('');
   const [items, setItems] = useState<LocalOrderItem[]>([]);
-  const [selectedItemId, setSelectedItemId] = useState<number | ''>('');
+  const [selectedParentId, setSelectedParentId] = useState<number | ''>('');
+  const [selectedVariantId, setSelectedVariantId] = useState<number | ''>('');
   const [selectedItemQty, setSelectedItemQty] = useState('');
-  const [formError, setFormError] = useState('');
+  const [selectedSerialIds, setSelectedSerialIds] = useState<number[]>([]);
   const [showNewVendorForm, setShowNewVendorForm] = useState(false);
   const [newVendorName, setNewVendorName] = useState('');
   const [newVendorContact, setNewVendorContact] = useState('');
   const [newVendorPhone, setNewVendorPhone] = useState('');
   const [newVendorAddress, setNewVendorAddress] = useState('');
+  const [newVendorPincode, setNewVendorPincode] = useState('');
+  const [variants, setVariants] = useState<InventoryItemResponse[]>([]);
+  const [serials, setSerials] = useState<SerialNumberResponse[]>([]);
+  const [loadingVariants, setLoadingVariants] = useState(false);
+  const [_loadingSerials, setLoadingSerials] = useState(false);
 
   const { mutate: createVendor, isPending: creatingVendor } = useCreateVendor((vendor) => {
     setVendorId(vendor.id);
@@ -41,6 +50,7 @@ export const OrderCreatePage: React.FC = () => {
     setNewVendorContact('');
     setNewVendorPhone('');
     setNewVendorAddress('');
+    setNewVendorPincode('');
   });
 
   const { mutate: createOrder, isPending } = useCreateOrder((order) => {
@@ -51,68 +61,127 @@ export const OrderCreatePage: React.FC = () => {
 
   const vendors = vendorsData?.items ?? [];
   const inventoryItems = inventoryData?.items ?? [];
+
+  // Only show parent items (no parent_id) and standalone items in the top-level dropdown
+  const parentItems = useMemo(() => {
+    return inventoryItems.filter(i => !i.parent_id);
+  }, [inventoryItems]);
+
   const selectedVendor = vendors.find((v) => v.id === vendorId);
 
-  // Auto-fill delivery address from vendor when checkbox is on or vendor changes
-  React.useEffect(() => {
-    if (sameAsVendorAddress && selectedVendor) {
-      setDeliveryName(selectedVendor.contact_person || selectedVendor.name);
-      setDeliveryPhone(selectedVendor.phone || '');
-      const parts = [selectedVendor.address, selectedVendor.city, selectedVendor.state].filter(Boolean);
-      setDeliveryAddressText(parts.join(', '));
+  // When parent item changes, load its variant children
+  const loadVariants = async (parentId: number) => {
+    setLoadingVariants(true);
+    setSelectedVariantId('');
+    setSerials([]);
+    setSelectedSerialIds([]);
+    try {
+      const parent = await inventoryApi.get(parentId);
+      setVariants(parent.children || []);
+    } catch {
+      setVariants([]);
     }
-  }, [sameAsVendorAddress, vendorId]);
+    setLoadingVariants(false);
+  };
+
+  // When variant item changes, load its serials
+  const loadSerials = async (variantId: number) => {
+    setLoadingSerials(true);
+    setSelectedSerialIds([]);
+    try {
+      const data = await inventoryApi.getSerials(variantId);
+      setSerials(data.filter(s => !s.assigned_to_order_id));
+    } catch {
+      setSerials([]);
+    }
+    setLoadingSerials(false);
+  };
+
+  const resetItemSelection = () => {
+    setSelectedParentId('');
+    setSelectedVariantId('');
+    setSelectedItemQty('');
+    setSelectedSerialIds([]);
+    setVariants([]);
+    setSerials([]);
+  };
+
+  const toggleSerial = (sid: number) => {
+    setSelectedSerialIds(prev =>
+      prev.includes(sid) ? prev.filter(id => id !== sid) : [...prev, sid]
+    );
+  };
 
   const addItem = () => {
-    setFormError('');
-
     if (!vendorId) {
-      setFormError('Please select a vendor before adding items');
-      return;
-    }
-
-    if (!selectedItemId) {
-      setFormError('Please select an item');
+      toast.error('Please select a vendor before adding items', { duration: 2000 });
       return;
     }
 
     const qty = parseInt(selectedItemQty, 10);
     if (!selectedItemQty || qty <= 0) {
-      setFormError('Please enter a valid quantity (greater than 0)');
+      toast.error('Please enter a valid quantity (greater than 0)', { duration: 2000 });
       return;
     }
 
-    const item = inventoryItems.find((i) => i.id === selectedItemId);
-    if (!item) {
-      setFormError('Item not found');
+    // Determine the actual variant being ordered
+    let actualItemId: number;
+    let itemName: string;
+    let variantName: string | undefined;
+
+    if (selectedVariantId) {
+      // Ordering a variant of a parent
+      actualItemId = selectedVariantId as number;
+      const variant = variants.find(v => v.id === actualItemId);
+      if (!variant) { toast.error('Selected variant not found', { duration: 2000 }); return; }
+      itemName = variant.name;
+      variantName = variant.name;
+    } else if (selectedParentId) {
+      // Parent selected but no variant — treat parent as standalone (it has no children)
+      actualItemId = selectedParentId as number;
+      const parent = inventoryItems.find(i => i.id === actualItemId);
+      if (!parent) { toast.error('Item not found', { duration: 2000 }); return; }
+      itemName = parent.name;
+    } else {
+      toast.error('Please select an item', { duration: 2000 });
       return;
     }
 
-    // Check available quantity (hard block - don't allow over-order)
+    // Serial validation
+    const hasSerials = serials.length > 0;
+    if (hasSerials && selectedSerialIds.length !== qty) {
+      toast.error(`Please select exactly ${qty} serial number(s) for ${itemName} (selected ${selectedSerialIds.length})`, { duration: 2000 });
+      return;
+    }
+
+    // Check available quantity
     const totalOrderedForItem = items
-      .filter((i) => i.item_id === item.id)
+      .filter((i) => i.item_id === actualItemId)
       .reduce((sum, i) => sum + i.quantity_ordered, 0);
-    const available = item.current_quantity - totalOrderedForItem;
+    const selectedItem = variants.find(v => v.id === actualItemId) || inventoryItems.find(i => i.id === actualItemId);
+    const available = selectedItem ? selectedItem.current_quantity - totalOrderedForItem : 0;
 
     if (qty > available) {
-      const overBy = qty - available;
-      setFormError(
-        `Cannot order ${qty} units of "${item.name}" — only ${available} available` +
-        (overBy > 0 ? ` (exceeds by ${overBy})` : '')
-      );
+      toast.error(`Cannot order ${qty} units of "${itemName}" — only ${available} available`, { duration: 2000 });
       return;
     }
+
+    const serialLabels = hasSerials
+      ? serials.filter(s => selectedSerialIds.includes(s.id)).map(s => s.serial_number)
+      : undefined;
 
     const newItem: LocalOrderItem = {
       id: `item-${Date.now()}`,
-      item_id: item.id,
-      item_name: item.name,
+      item_id: actualItemId,
+      item_name: itemName,
+      variant_name: variantName,
       quantity_ordered: qty,
+      serial_ids: hasSerials ? [...selectedSerialIds] : undefined,
+      serial_labels: serialLabels,
     };
 
     setItems([...items, newItem]);
-    setSelectedItemId('');
-    setSelectedItemQty('');
+    resetItemSelection();
   };
 
   const removeItem = (id: string) => {
@@ -126,6 +195,7 @@ export const OrderCreatePage: React.FC = () => {
       contact_person: newVendorContact.trim() || undefined,
       phone: newVendorPhone.trim() || undefined,
       address: newVendorAddress.trim() || undefined,
+      pincode: newVendorPincode.trim() || undefined,
     });
   };
 
@@ -138,27 +208,20 @@ export const OrderCreatePage: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError('');
 
-    if (!vendorId) {
-      setFormError('Please select a vendor');
-      return;
-    }
-
-    if (items.length === 0) {
-      setFormError('Please add at least one item to the order');
-      return;
+    if (!vendorId) { toast.error('Please select a vendor', { duration: 2000 }); return; }
+    if (items.length === 0) { toast.error('Please add at least one item', { duration: 2000 }); return; }
+    if (sameAsVendorAddress && !selectedVendor?.address?.trim()) {
+      toast.error('Vendor has no address. Uncheck "Same as vendor address" or add an address to the vendor.', { duration: 3000 }); return;
     }
 
     if (!sameAsVendorAddress && deliveryName.trim()) {
       const phoneDigits = deliveryPhone.replace(/\D/g, '');
       if (deliveryPhone.trim() && phoneDigits.length !== 10) {
-        setFormError('Delivery phone must be exactly 10 digits');
-        return;
+        toast.error('Delivery phone must be exactly 10 digits', { duration: 2000 }); return;
       }
       if (deliveryPincode.trim() && !/^\d{6}$/.test(deliveryPincode)) {
-        setFormError('Delivery pincode must be exactly 6 digits');
-        return;
+        toast.error('Delivery pincode must be exactly 6 digits', { duration: 2000 }); return;
       }
     }
 
@@ -167,6 +230,7 @@ export const OrderCreatePage: React.FC = () => {
       items: items.map((item) => ({
         item_id: item.item_id,
         quantity_ordered: item.quantity_ordered,
+        serial_ids: item.serial_ids,
       })),
       remarks: remarks || undefined,
       delivery_address: buildDeliveryAddress(),
@@ -194,23 +258,13 @@ export const OrderCreatePage: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {formError && (
-          <Card className={cardErrorPadded} padding="lg">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
-              <p className="text-error">{formError}</p>
-            </div>
-          </Card>
-        )}
 
         {/* Vendor Section */}
         <Card padding="lg">
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Vendor Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={formLabel}>
-                Select Vendor *
-              </label>
+              <label className={formLabel}>Select Vendor *</label>
               {vendorsLoading ? (
                 <div className="flex items-center gap-2 text-neutral-500">
                   <Loader className="w-4 h-4 animate-spin" />
@@ -285,17 +339,21 @@ export const OrderCreatePage: React.FC = () => {
                             placeholder="Address"
                           />
                         </div>
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-700 mb-1">Pincode</label>
+                          <input
+                            type="text"
+                            value={newVendorPincode}
+                            onChange={(e) => setNewVendorPincode(e.target.value)}
+                            className="w-full px-2 py-1.5 text-sm border border-neutral-300 rounded"
+                            placeholder="Pincode"
+                          />
+                        </div>
                       </div>
                       <div className="flex gap-2 justify-end">
                         <button
                           type="button"
-                          onClick={() => {
-                            setShowNewVendorForm(false);
-                            setNewVendorName('');
-                            setNewVendorContact('');
-                            setNewVendorPhone('');
-                            setNewVendorAddress('');
-                          }}
+                          onClick={() => { setShowNewVendorForm(false); setNewVendorName(''); setNewVendorContact(''); setNewVendorPhone(''); setNewVendorAddress(''); setNewVendorPincode(''); }}
                           className="px-3 py-1.5 text-sm border border-neutral-300 rounded text-neutral-700 hover:bg-neutral-100"
                         >
                           Cancel
@@ -319,9 +377,7 @@ export const OrderCreatePage: React.FC = () => {
 
             {selectedVendor && (
               <div>
-                <label className={formLabel}>
-                  Vendor Details
-                </label>
+                <label className={formLabel}>Vendor Details</label>
                 <div className="bg-neutral-50 rounded-lg p-4">
                   <p className="font-medium text-neutral-900">{selectedVendor.name}</p>
                   {selectedVendor.contact_person && (
@@ -342,49 +398,95 @@ export const OrderCreatePage: React.FC = () => {
 
           {/* Add Item Form */}
           <div className="mb-6 pb-6 border-b border-neutral-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              {/* Parent Item / Standalone Item Dropdown */}
               <div>
-                <label className={formLabel}>Item</label>
+                <label className={formLabel}>
+                  Product
+                  <span className="ml-1 group relative inline-block">
+                    <Info className="w-3.5 h-3.5 text-neutral-400 inline cursor-help" />
+                    <span className="invisible group-hover:visible absolute left-0 top-full mt-1 w-56 p-2 bg-neutral-800 text-white text-xs rounded shadow-lg z-10">
+                      Select a product. If it has variants, choose one below.
+                    </span>
+                  </span>
+                </label>
                 {inventoryLoading ? (
                   <div className="flex items-center gap-2 text-neutral-500">
                     <Loader className="w-4 h-4 animate-spin" />
-                    <span>Loading items...</span>
+                    <span>Loading...</span>
                   </div>
                 ) : (
-                  <>
-                    <select
-                      value={selectedItemId}
-                      onChange={(e) => setSelectedItemId(e.target.value ? parseInt(e.target.value) : '')}
-                      className="w-full border border-neutral-300 rounded-lg px-3 py-2"
-                    >
-                      <option value="">-- Select Item --</option>
-                      {inventoryItems.map((item) => {
-                        const totalOrdered = items
-                          .filter((i) => i.item_id === item.id)
-                          .reduce((sum, i) => sum + i.quantity_ordered, 0);
-                        const available = item.current_quantity - totalOrdered;
-                        return (
-                          <option key={item.id} value={item.id}>
-                            {item.name} (SKU: {item.sku}) - Available: {available}/{item.current_quantity}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    {selectedItemId && (() => {
-                      const item = inventoryItems.find((i) => i.id === selectedItemId);
-                      if (!item) return null;
-                      const totalOrdered = items
-                        .filter((i) => i.item_id === item.id)
-                        .reduce((sum, i) => sum + i.quantity_ordered, 0);
-                      const available = item.current_quantity - totalOrdered;
-                      return available <= 5 ? (
-                        <p className="text-xs text-warning mt-1">⚠️ Low stock: only {available} available</p>
-                      ) : null;
-                    })()}
-                  </>
+                  <select
+                    value={selectedParentId}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseInt(e.target.value) : '';
+                      setSelectedParentId(val);
+                      if (val) loadVariants(val);
+                      else { setVariants([]); setSerials([]); setSelectedSerialIds([]); }
+                      setSelectedVariantId('');
+                      setSelectedItemQty('');
+                    }}
+                    className="w-full border border-neutral-300 rounded-lg px-3 py-2"
+                  >
+                    <option value="">-- Select Product --</option>
+                    {parentItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} (SKU: {item.sku})
+                      </option>
+                    ))}
+                  </select>
                 )}
               </div>
 
+              {/* Variant Dropdown (shown when parent has children) */}
+              <div>
+                <label className={formLabel}>
+                  Variant
+                  {variants.length > 0 && (
+                    <span className="text-xs text-neutral-400 ml-1">({variants.length} available)</span>
+                  )}
+                </label>
+                {loadingVariants ? (
+                  <div className="flex items-center gap-2 text-neutral-500 h-10">
+                    <Loader className="w-4 h-4 animate-spin" />
+                  </div>
+                ) : (
+                  <select
+                    value={selectedVariantId}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseInt(e.target.value) : '';
+                      setSelectedVariantId(val);
+                      if (val) loadSerials(val);
+                      else { setSerials([]); setSelectedSerialIds([]); }
+                      setSelectedItemQty('');
+                    }}
+                    className="w-full border border-neutral-300 rounded-lg px-3 py-2"
+                    disabled={!selectedParentId || variants.length === 0}
+                  >
+                    <option value="">
+                      {!selectedParentId
+                        ? '-- Select product first --'
+                        : variants.length === 0
+                          ? '-- No variants (standalone item) --'
+                          : '-- Select variant --'}
+                    </option>
+                    {variants.map((v) => {
+                      const totalOrdered = items.filter(i => i.item_id === v.id).reduce((s, i) => s + i.quantity_ordered, 0);
+                      const available = v.current_quantity - totalOrdered;
+                      const desc = v.description || '';
+                      const prim = desc.match(/Primary:\s*(.*?)(?:\s*\||$)/)?.[1]?.trim() || '';
+                      const sec = desc.match(/Secondary:\s*(.*?)(?:\s*\||$)/)?.[1]?.trim() || '';
+                      return (
+                        <option key={v.id} value={v.id}>
+                          {v.name}{prim ? ` | ${prim}` : ''}{sec ? ` | ${sec}` : ''} | {Math.max(0, available)} qty
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
+
+              {/* Quantity */}
               <div>
                 <label className={formLabel}>Quantity</label>
                 <input
@@ -392,8 +494,9 @@ export const OrderCreatePage: React.FC = () => {
                   min="1"
                   value={selectedItemQty}
                   onChange={(e) => setSelectedItemQty(e.target.value)}
-                  placeholder="Enter quantity"
+                  placeholder={serials.length > 0 ? 'Must match serial count' : 'Enter qty'}
                   className="w-full border border-neutral-300 rounded-lg px-3 py-2"
+                  disabled={!selectedParentId}
                 />
               </div>
 
@@ -401,26 +504,59 @@ export const OrderCreatePage: React.FC = () => {
                 <Button
                   type="button"
                   onClick={addItem}
-                  disabled={inventoryLoading || !selectedItemId || !selectedItemQty}
+                  disabled={!selectedParentId || !selectedItemQty || (serials.length > 0 && selectedSerialIds.length !== parseInt(selectedItemQty || '0'))}
                   className="w-full bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
                 >
                   Add Item
                 </Button>
               </div>
             </div>
+
+            {/* Serial Picker — shown when variant has serials */}
+            {serials.length > 0 && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm font-medium text-blue-800 mb-2">
+                  Select {selectedItemQty || '...'} serial number(s) for this variant:
+                </p>
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                  {serials.map((s) => {
+                    const selected = selectedSerialIds.includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => toggleSerial(s.id)}
+                        className={`px-2 py-1 text-xs font-mono rounded border transition-colors ${
+                          selected
+                            ? 'bg-primary-600 text-white border-primary-600'
+                            : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100'
+                        }`}
+                      >
+                        {s.serial_number}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-blue-600 mt-1">
+                  Selected: {selectedSerialIds.length} / {selectedItemQty || '?'}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Items List */}
           {items.length > 0 ? (
             <div className="space-y-2">
               {items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg"
-                >
+                <div key={item.id} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
                   <div>
                     <p className="font-medium text-neutral-900">{item.item_name}</p>
                     <p className="text-sm text-neutral-600">Quantity: {item.quantity_ordered}</p>
+                    {item.serial_labels && item.serial_labels.length > 0 && (
+                      <p className="text-xs text-neutral-500 mt-0.5">
+                        Serials: {item.serial_labels.join(', ')}
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -442,21 +578,14 @@ export const OrderCreatePage: React.FC = () => {
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Additional Information</h2>
           <div className="space-y-4">
             <div>
-              <label className={formLabel}>
-                Delivery Address
-              </label>
+              <label className={formLabel}>Delivery Address</label>
               <label className="flex items-center gap-2 mb-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={sameAsVendorAddress}
                   onChange={(e) => {
                     setSameAsVendorAddress(e.target.checked);
-                    if (!e.target.checked) {
-                      setDeliveryName('');
-                      setDeliveryPhone('');
-                      setDeliveryAddressText('');
-                      setDeliveryPincode('');
-                    }
+                    if (!e.target.checked) { setDeliveryName(''); setDeliveryPhone(''); setDeliveryAddressText(''); setDeliveryPincode(''); }
                   }}
                   className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
                 />
@@ -467,46 +596,20 @@ export const OrderCreatePage: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-neutral-700 mb-1">Recipient Name</label>
-                      <input
-                        type="text"
-                        value={deliveryName}
-                        onChange={(e) => setDeliveryName(e.target.value)}
-                        placeholder="Recipient name"
-                        className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
-                      />
+                      <input type="text" value={deliveryName} onChange={(e) => setDeliveryName(e.target.value)} placeholder="Recipient name" className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-neutral-700 mb-1">Phone (10 digits)</label>
-                      <input
-                        type="tel"
-                        value={deliveryPhone}
-                        onChange={(e) => setDeliveryPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder="9876543210"
-                        maxLength={10}
-                        className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
-                      />
+                      <input type="tel" value={deliveryPhone} onChange={(e) => setDeliveryPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="9876543210" maxLength={10} className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-neutral-700 mb-1">Address</label>
-                    <textarea
-                      value={deliveryAddressText}
-                      onChange={(e) => setDeliveryAddressText(e.target.value)}
-                      placeholder="Street, area, landmark, city..."
-                      rows={2}
-                      className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm"
-                    />
+                    <textarea value={deliveryAddressText} onChange={(e) => setDeliveryAddressText(e.target.value)} placeholder="Street, area, landmark, city..." rows={2} className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm" />
                   </div>
                   <div className="sm:w-1/3">
                     <label className="block text-xs font-medium text-neutral-700 mb-1">Pincode (6 digits)</label>
-                    <input
-                      type="text"
-                      value={deliveryPincode}
-                      onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="400001"
-                      maxLength={6}
-                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
-                    />
+                    <input type="text" value={deliveryPincode} onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="400001" maxLength={6} className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
                   </div>
                 </div>
               )}
@@ -514,31 +617,17 @@ export const OrderCreatePage: React.FC = () => {
 
             <div>
               <label className={formLabel}>Remarks</label>
-              <textarea
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Add any special remarks or notes..."
-                rows={3}
-                className="w-full border border-neutral-300 rounded-lg px-3 py-2"
-              />
+              <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Add any special remarks or notes..." rows={3} className="w-full border border-neutral-300 rounded-lg px-3 py-2" />
             </div>
           </div>
         </Card>
 
         {/* Submit Section */}
         <div className="flex gap-3 justify-end">
-          <Button
-            type="button"
-            onClick={() => navigate('/orders')}
-            className="px-6 py-2 border border-neutral-300 rounded-lg text-neutral-700 hover:bg-neutral-50"
-          >
+          <Button type="button" onClick={() => navigate('/orders')} className="px-6 py-2 border border-neutral-300 rounded-lg text-neutral-700 hover:bg-neutral-50">
             Cancel
           </Button>
-          <Button
-            type="submit"
-            disabled={isPending || items.length === 0}
-            className="px-6 py-2 bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
-          >
+          <Button type="submit" disabled={isPending || items.length === 0} className="px-6 py-2 bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
             {isPending && <Loader className="w-4 h-4 animate-spin" />}
             {isPending ? 'Creating...' : 'Create Order'}
           </Button>

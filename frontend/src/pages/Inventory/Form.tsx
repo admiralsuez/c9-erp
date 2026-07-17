@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card, Button, Input, Textarea, Select } from '../../components/ui';
 import { ImageUpload } from '../../components/inventory/ImageUpload';
-import { SerialNumberInput } from '../../components/inventory/SerialNumberInput';
 import { formLabel } from '../../styles/classNames';
 import { createItemSchema } from '../../utils/validation';
-import { ArrowLeft, Plus } from 'lucide-react';
-import { useCreateInventoryItem } from '../../hooks/useInventory';
-import type { InventoryItemCreateRequest } from '../../api/inventory';
+import { ArrowLeft, Plus, Trash2, Info } from 'lucide-react';
+import { useCreateInventoryItem, useCreateInventoryItemBatch, useInventory } from '../../hooks/useInventory';
+import type { InventoryItemCreateRequest, InventoryItemChildRequest } from '../../api/inventory';
 
 interface InventoryFormProps {
   isEdit?: boolean;
@@ -22,18 +21,32 @@ const itemTypes = [
   { value: 'returnable', label: 'Returnable (Multi-use)' },
 ];
 
-export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false }) => {
+export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false, itemId }) => {
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [uploadedImages, setUploadedImages] = useState<{ front?: string; back?: string }>({});
-  const [generatedSerials, setGeneratedSerials] = useState<any[]>([]);
+
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCategory, setNewCategory] = useState('');
   const [notifyLowStock, setNotifyLowStock] = useState(false);
+  const [selectedParentId, setSelectedParentId] = useState<number | ''>('');
+  const [parentItems, setParentItems] = useState<Array<{ id: number; name: string; sku: string }>>([]);
+  const [isParent, setIsParent] = useState(false);
+  const [children, setChildren] = useState<InventoryItemChildRequest[]>([]);
+  const childrenEndRef = useRef<HTMLDivElement>(null);
+  const { data: itemsData } = useInventory(1, 100);
   const { mutate: createItem, isPending } = useCreateInventoryItem((item) => {
     navigate(`/inventory/${item.id}`);
   });
+  const { mutate: createBatch, isPending: isBatchPending } = useCreateInventoryItemBatch((item) => {
+    navigate(`/inventory/${item.id}`);
+  });
+
+  useEffect(() => {
+    if (itemsData?.items) {
+      setParentItems(itemsData.items.filter(i => !i.parent_id));
+    }
+  }, [itemsData]);
 
   const handleAddCategory = () => {
     if (newCategory.trim() && !categories.includes(newCategory)) {
@@ -61,21 +74,79 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
     },
   });
 
+  const addChild = () => {
+    setChildren([...children, {
+      name: '',
+      sku: '',
+      item_type: 'consumable',
+      current_quantity: 0,
+      minimum_quantity: 0,
+      primary_attribute: '',
+      secondary_attribute: '',
+      notes: '',
+    }]);
+  };
+
+  const removeChild = (index: number) => {
+    setChildren(children.filter((_, i) => i !== index));
+  };
+
+  const duplicateChild = (index: number) => {
+    const child = children[index];
+    setChildren([...children, { ...child }]);
+    setTimeout(() => childrenEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 0);
+  };
+
+  const updateChild = (index: number, field: keyof InventoryItemChildRequest, value: any) => {
+    const updated = children.map((c, i) => i === index ? { ...c, [field]: value } : c);
+    setChildren(updated);
+  };
+
   const onSubmit = async (data: any) => {
     setSubmitError(null);
 
-    const itemData: InventoryItemCreateRequest = {
-      name: data.name,
-      sku: data.sku,
-      barcode: data.barcode || undefined,
-      category_id: data.category_id || undefined,
-      item_type: data.item_type,
-      current_quantity: data.opening_quantity || 0,
-      minimum_quantity: data.minimum_quantity,
-      description: data.description || undefined,
-    };
+    if (isParent) {
+      if (children.length === 0) {
+        setSubmitError('Add at least one child item');
+        return;
+      }
+      const invalidChildren = children.filter(c => !c.name.trim() || !c.sku.trim());
+      if (invalidChildren.length > 0) {
+        setSubmitError('Each child needs a name and SKU');
+        return;
+      }
+      createBatch({
+        parent: {
+          name: data.name,
+          sku: data.sku,
+          barcode: data.barcode || undefined,
+          category_id: data.category_id || undefined,
+          item_type: data.item_type,
+          current_quantity: 0,
+          minimum_quantity: 0,
+          description: data.description || undefined,
+        },
+        children: children.map(c => ({
+          ...c,
+          current_quantity: c.current_quantity || 0,
+          minimum_quantity: c.minimum_quantity || 0,
+        })),
+      });
+    } else {
+      const itemData: InventoryItemCreateRequest = {
+        name: data.name,
+        sku: data.sku,
+        barcode: data.barcode || undefined,
+        category_id: data.category_id || undefined,
+        item_type: data.item_type,
+        current_quantity: data.opening_quantity || 0,
+        minimum_quantity: data.minimum_quantity,
+        description: data.description || undefined,
+        parent_id: selectedParentId || undefined,
+      };
 
-    createItem(itemData);
+      createItem(itemData);
+    }
   };
 
   return (
@@ -95,7 +166,9 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
           <p className="text-neutral-600 mt-1">
             {isEdit
               ? 'Update item details and inventory settings'
-              : 'Create a new inventory item with all required details'}
+              : isParent
+                ? 'Create a parent item and add multiple child variants'
+                : 'Create a new inventory item with all required details'}
           </p>
         </div>
       </div>
@@ -107,6 +180,22 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
             {submitError}
           </div>
         )}
+
+        {/* Parent with Children Toggle — top of form */}
+        <div className="flex items-start gap-3 p-4 bg-primary-50 rounded-lg border border-primary-200">
+          <input
+            type="checkbox"
+            id="is_parent"
+            checked={isParent}
+            onChange={(e) => setIsParent(e.target.checked)}
+            className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-2 focus:ring-primary-500 mt-1 flex-shrink-0"
+            disabled={isPending || isBatchPending}
+          />
+          <label htmlFor="is_parent" className="text-sm text-neutral-700 flex-1 cursor-pointer">
+            <span className="font-medium block mb-1">This is a parent item with variants</span>
+            <span className="text-neutral-600">Create this as a parent SKU and add multiple child variants (e.g., different sizes, colors) in one go</span>
+          </label>
+        </div>
 
         {/* Section 1: Item Identity */}
         <Card padding="lg">
@@ -168,9 +257,8 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
               <div>
                 <label className={formLabel}>Category</label>
                 <div className="flex gap-2">
-                  <select
+                    <select
                     {...register('category_id', { valueAsNumber: true })}
-                    placeholder="Select Category"
                     disabled={isPending || showAddCategory}
                     className="flex-1 form-input"
                   >
@@ -204,6 +292,168 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
                 options={itemTypes}
               />
             </div>
+            <div className="relative">
+              <label className={formLabel}>
+                Parent Item (optional)
+                <span className="ml-1 group inline-block">
+                  <Info className="w-3.5 h-3.5 text-neutral-400 inline cursor-help" />
+                  <span className="invisible group-hover:visible absolute left-0 top-full mt-1 w-64 p-2 bg-neutral-800 text-white text-xs rounded shadow-lg z-10">
+                    Variants grouped under a parent share the same product family. Only parent items appear in the order form — select a variant after picking the parent.
+                  </span>
+                </span>
+              </label>
+              <select
+                value={isParent ? -1 : selectedParentId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedParentId(val ? parseInt(val) : '');
+                }}
+                className="form-input"
+                disabled={isPending || isParent}
+              >
+                <option value="">Standalone item (no parent)</option>
+                {isParent && (
+                  <option value="-1">This item is a parent</option>
+                )}
+                {parentItems
+                  .filter(p => p.id !== (isEdit ? itemId : undefined))
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.sku})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Children Section */}
+            {isParent && (
+              <div className="space-y-3 border border-neutral-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-neutral-900">Child Variants</h3>
+                  <button
+                    type="button"
+                    onClick={addChild}
+                    className="text-sm px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition flex items-center gap-1"
+                    disabled={isBatchPending}
+                  >
+                    <Plus size={14} /> Add Child
+                  </button>
+                </div>
+
+                {children.length === 0 && (
+                  <p className="text-sm text-neutral-500 py-2">No children added yet. Click "Add Child" to create variants.</p>
+                )}
+
+                {children.map((child, idx) => (
+                  <div key={idx} ref={idx === children.length - 1 ? childrenEndRef : undefined} className="border border-neutral-200 rounded-lg p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-neutral-500 uppercase">Child {idx + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => duplicateChild(idx)}
+                          className="text-primary-600 hover:text-primary-800 transition text-xs font-medium"
+                          title="Duplicate child"
+                        >
+                          + Duplicate
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeChild(idx)}
+                          className="text-red-500 hover:text-red-700 transition"
+                          title="Remove child"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-neutral-700 block mb-1">Name *</label>
+                        <input
+                          type="text"
+                          value={child.name}
+                          onChange={(e) => updateChild(idx, 'name', e.target.value)}
+                          placeholder="e.g., Visicooler-360L"
+                          className="form-input text-sm"
+                          disabled={isBatchPending}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-neutral-700 block mb-1">SKU *</label>
+                        <input
+                          type="text"
+                          value={child.sku}
+                          onChange={(e) => updateChild(idx, 'sku', e.target.value)}
+                          placeholder="e.g., VC-360L"
+                          className="form-input text-sm"
+                          disabled={isBatchPending}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-neutral-700 block mb-1">Primary Attribute</label>
+                        <input
+                          type="text"
+                          value={child.primary_attribute || ''}
+                          onChange={(e) => updateChild(idx, 'primary_attribute', e.target.value)}
+                          placeholder="e.g., Capacity"
+                          className="form-input text-sm"
+                          disabled={isBatchPending}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-neutral-700 block mb-1">Secondary Attribute</label>
+                        <input
+                          type="text"
+                          value={child.secondary_attribute || ''}
+                          onChange={(e) => updateChild(idx, 'secondary_attribute', e.target.value)}
+                          placeholder="e.g., 360 Liters"
+                          className="form-input text-sm"
+                          disabled={isBatchPending}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-neutral-700 block mb-1">Quantity</label>
+                        <input
+                          type="number"
+                          value={child.current_quantity}
+                          onChange={(e) => updateChild(idx, 'current_quantity', parseInt(e.target.value) || 0)}
+                          placeholder="0"
+                          className="form-input text-sm"
+                          disabled={isBatchPending}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-neutral-700 block mb-1">Min. Stock</label>
+                        <input
+                          type="number"
+                          value={child.minimum_quantity}
+                          onChange={(e) => updateChild(idx, 'minimum_quantity', parseInt(e.target.value) || 0)}
+                          placeholder="0"
+                          className="form-input text-sm"
+                          disabled={isBatchPending}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-neutral-700 block mb-1">Notes (visible during ordering)</label>
+                      <textarea
+                        value={child.notes || ''}
+                        onChange={(e) => updateChild(idx, 'notes', e.target.value)}
+                        placeholder="e.g., Special event use only, requires manager approval"
+                        rows={2}
+                        className="form-input text-sm resize-none"
+                        disabled={isBatchPending}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Add Category Modal */}
             {showAddCategory && (
@@ -257,63 +507,58 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
         {/* Section 2.5: Item Images */}
         <Card padding="lg">
           <ImageUpload
-            onImageUpload={(type, url) => {
-              setUploadedImages((prev) => ({ ...prev, [type]: url }));
-            }}
             disabled={isPending}
           />
         </Card>
 
         {/* Section 3: Stock Management */}
-        <Card padding="lg">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4">
-            Stock Management
-          </h2>
-          <div className="space-y-6">
-            {/* Available Quantity & Safety Stock */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Input
-                  {...register('opening_quantity', { valueAsNumber: true })}
-                  type="number"
-                  label="Available Quantity *"
-                  placeholder="e.g., 45"
-                  error={errors.opening_quantity?.message as string}
-                  disabled={isPending}
-                  helperText="Initial stock level for this item"
-                />
+        {!isParent && (
+          <Card padding="lg">
+            <h2 className="text-lg font-semibold text-neutral-900 mb-4">
+              Stock Management
+            </h2>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Input
+                    {...register('opening_quantity', { valueAsNumber: true })}
+                    type="number"
+                    label="Available Quantity *"
+                    placeholder="e.g., 45"
+                    error={errors.opening_quantity?.message as string}
+                    disabled={isPending}
+                    hint="Initial stock level for this item"
+                  />
+                </div>
+                <div>
+                  <Input
+                    {...register('minimum_quantity', { valueAsNumber: true })}
+                    type="number"
+                    label="Safety Stock *"
+                    placeholder="e.g., 10"
+                    error={errors.minimum_quantity?.message as string}
+                    disabled={isPending}
+                    hint="Minimum stock level to maintain"
+                  />
+                </div>
               </div>
-
-              <div>
-                <Input
-                  {...register('minimum_quantity', { valueAsNumber: true })}
-                  type="number"
-                  label="Safety Stock *"
-                  placeholder="e.g., 10"
-                  error={errors.minimum_quantity?.message as string}
+              <div className="flex items-start gap-3 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+                <input
+                  type="checkbox"
+                  id="notify_low_stock"
+                  checked={notifyLowStock}
+                  onChange={(e) => setNotifyLowStock(e.target.checked)}
+                  className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-2 focus:ring-primary-500 mt-1 flex-shrink-0"
                   disabled={isPending}
-                  helperText="Minimum stock level to maintain"
                 />
+                <label htmlFor="notify_low_stock" className="text-sm text-neutral-700 flex-1">
+                  <span className="font-medium block mb-1">Notify me when stock falls below safety stock</span>
+                  <span className="text-neutral-600">Receive alerts when inventory reaches the safety stock level</span>
+                </label>
               </div>
             </div>
-
-            {/* Notification Checkbox */}
-            <div className="flex items-start gap-3 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
-              <input
-                type="checkbox"
-                id="notify_low_stock"
-                checked={notifyLowStock}
-                onChange={(e) => setNotifyLowStock(e.target.checked)}
-                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-2 focus:ring-primary-500 mt-1 flex-shrink-0"
-                disabled={isPending}
-              />
-              <label htmlFor="notify_low_stock" className="text-sm text-neutral-700 flex-1">
-                <span className="font-medium block mb-1">Notify me when stock falls below safety stock</span>
-                <span className="text-neutral-600">Receive alerts when inventory reaches the safety stock level</span>
-              </label>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        )}
 
         {/* Section 4: Location & Supplier */}
         <Card padding="lg">
@@ -383,9 +628,9 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
           <Button
             type="submit"
             className="flex-1 bg-primary-600 text-white hover:bg-primary-700 flex items-center justify-center gap-2"
-            disabled={isPending}
+            disabled={isPending || isBatchPending}
           >
-            {isPending ? 'Saving...' : isEdit ? 'Update Item' : 'Create Item'}
+            {isPending || isBatchPending ? 'Saving...' : isEdit ? 'Update Item' : isParent ? 'Create Parent with Children' : 'Create Item'}
           </Button>
         </div>
       </form>

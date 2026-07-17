@@ -7,19 +7,23 @@ from app.models import (
     User, InventoryItem, InventoryCategory, InventoryTransaction,
     WarehouseBin
 )
+from sqlalchemy.orm import selectinload
 from app.services.audit_service import log_audit
 from app.services.inventory_service import restock_item as svc_restock, adjust_item as svc_adjust
 from app.schemas import (
     InventoryCategoryCreate, InventoryCategoryResponse,
     InventoryItemCreate, InventoryItemUpdate, InventoryItemResponse,
-    InventoryItemDetailResponse, RestockRequest, AdjustmentRequest,
+    InventoryItemDetailResponse, InventoryItemBatchCreate,
+    RestockRequest, AdjustmentRequest,
     InventoryTransactionResponse
 )
 from typing import List
 from decimal import Decimal
 from datetime import datetime, timezone
+import logging
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
+logger = logging.getLogger(__name__)
 
 
 # ============ INVENTORY CATEGORIES ============
@@ -150,7 +154,9 @@ def list_items(
     total = query.count()
     
     skip = (page - 1) * size
-    items = query.offset(skip).limit(size).all()
+    items = query.options(
+        selectinload(InventoryItem.children)
+    ).offset(skip).limit(size).all()
     
     total_pages = (total + size - 1) // size
     
@@ -215,12 +221,30 @@ def create_item(
                 detail="Bin not found"
             )
     
+    # Validate one-level parent: parent must exist and must not itself be a variant
+    if item_data.parent_id:
+        parent_item = db.query(InventoryItem).filter(
+            InventoryItem.id == item_data.parent_id,
+            InventoryItem.deleted_at == None
+        ).first()
+        if not parent_item:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Parent item not found"
+            )
+        if parent_item.parent_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Selected parent is itself a variant — cannot nest further (one level only)"
+            )
+    
     item = InventoryItem(
         name=item_data.name,
         sku=item_data.sku,
         barcode=item_data.barcode,
         qr_code_data=item_data.barcode,  # Use barcode as QR data for now
         category_id=item_data.category_id,
+        parent_id=item_data.parent_id,
         item_type=item_data.item_type,
         current_quantity=Decimal(str(item_data.current_quantity)),
         reserved_quantity=Decimal("0"),
@@ -249,7 +273,99 @@ def create_item(
     
     db.commit()
     db.refresh(item)
+    logger.info(
+        "CREATED item(%d) '%s' type=%s qty=%s by %s",
+        item.id, item.sku, item.item_type, item_data.current_quantity, current_user.email
+    )
     return item
+
+
+@router.post("/items/batch", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)
+def create_items_batch(
+    data: InventoryItemBatchCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.create"))
+):
+    """Create a parent item with its children in one request."""
+    parent_data = data.parent
+    # Check SKU uniqueness
+    existing = db.query(InventoryItem).filter(InventoryItem.sku == parent_data.sku).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"SKU '{parent_data.sku}' already exists")
+    if parent_data.barcode:
+        existing_bc = db.query(InventoryItem).filter(InventoryItem.barcode == parent_data.barcode).first()
+        if existing_bc:
+            raise HTTPException(status_code=409, detail=f"Barcode '{parent_data.barcode}' already exists")
+    if parent_data.category_id:
+        cat = db.query(InventoryCategory).filter(InventoryCategory.id == parent_data.category_id).first()
+        if not cat:
+            raise HTTPException(status_code=404, detail="Category not found")
+
+    parent = InventoryItem(
+        name=parent_data.name, sku=parent_data.sku,
+        barcode=parent_data.barcode, qr_code_data=parent_data.barcode,
+        category_id=parent_data.category_id, item_type=parent_data.item_type,
+        current_quantity=Decimal(str(parent_data.current_quantity)),
+        reserved_quantity=Decimal("0"),
+        minimum_quantity=Decimal(str(parent_data.minimum_quantity)),
+        bin_id=parent_data.bin_id, description=parent_data.description,
+        image_url=parent_data.image_url
+    )
+    db.add(parent)
+    db.flush()
+
+    if parent_data.current_quantity > 0:
+        txn = InventoryTransaction(
+            item_id=parent.id, transaction_type="opening_balance",
+            previous_quantity=Decimal("0"),
+            change_quantity=Decimal(str(parent_data.current_quantity)),
+            new_quantity=Decimal(str(parent_data.current_quantity)),
+            reason="Opening balance", created_by=current_user.id
+        )
+        db.add(txn)
+
+    # Create children
+    for child_data in data.children:
+        if child_data.barcode:
+            existing_bc = db.query(InventoryItem).filter(InventoryItem.barcode == child_data.barcode).first()
+            if existing_bc:
+                raise HTTPException(status_code=409, detail=f"Child barcode '{child_data.barcode}' already exists")
+        desc_parts = []
+        if child_data.primary_attribute:
+            desc_parts.append(f"Primary: {child_data.primary_attribute}")
+        if child_data.secondary_attribute:
+            desc_parts.append(f"Secondary: {child_data.secondary_attribute}")
+        if child_data.notes:
+            desc_parts.append(f"Notes: {child_data.notes}")
+        child_desc = " | ".join(desc_parts) if desc_parts else child_data.description
+        child = InventoryItem(
+            name=child_data.name, sku=child_data.sku,
+            barcode=child_data.barcode, qr_code_data=child_data.barcode,
+            parent_id=parent.id, item_type=child_data.item_type,
+            current_quantity=Decimal(str(child_data.current_quantity)),
+            reserved_quantity=Decimal("0"),
+            minimum_quantity=Decimal(str(child_data.minimum_quantity)),
+            description=child_desc or child_data.description
+        )
+        db.add(child)
+        db.flush()
+        if child_data.current_quantity > 0:
+            txn = InventoryTransaction(
+                item_id=child.id, transaction_type="opening_balance",
+                previous_quantity=Decimal("0"),
+                change_quantity=Decimal(str(child_data.current_quantity)),
+                new_quantity=Decimal(str(child_data.current_quantity)),
+                reason="Opening balance", created_by=current_user.id
+            )
+            db.add(txn)
+
+    db.commit()
+    db.refresh(parent)
+    logger.info(
+        "CREATED parent(%d) '%s' + %d children by %s",
+        parent.id, parent.sku, len(data.children), current_user.email
+    )
+    return parent
 
 
 @router.get("/items/{item_id}", response_model=InventoryItemDetailResponse)
@@ -259,7 +375,10 @@ def get_item(
     current_user: User = Depends(get_current_user)
 ):
     """Get item details including transaction history."""
-    item = db.query(InventoryItem).filter(
+    item = db.query(InventoryItem).options(
+        selectinload(InventoryItem.children),
+        selectinload(InventoryItem.parent),
+    ).filter(
         InventoryItem.id == item_id,
         InventoryItem.deleted_at == None
     ).first()
@@ -293,6 +412,40 @@ def update_item(
         )
     
     update_data = item_data.model_dump(exclude_unset=True)
+    
+    # Validate one-level parent on update
+    if 'parent_id' in update_data and update_data['parent_id'] is not None:
+        # The item itself must not already have children
+        has_children = db.query(InventoryItem).filter(
+            InventoryItem.parent_id == item_id,
+            InventoryItem.deleted_at == None
+        ).count()
+        if has_children > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Item has existing variants — cannot assign a parent to a parent item"
+            )
+        # The target parent must exist and must not itself be a variant
+        parent_item = db.query(InventoryItem).filter(
+            InventoryItem.id == update_data['parent_id'],
+            InventoryItem.deleted_at == None
+        ).first()
+        if not parent_item:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Parent item not found"
+            )
+        if parent_item.id == item_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An item cannot be its own parent"
+            )
+        if parent_item.parent_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Target parent is itself a variant — cannot nest further (one level only)"
+            )
+    
     for field, value in update_data.items():
         setattr(item, field, value)
     

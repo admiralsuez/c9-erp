@@ -11,6 +11,7 @@ from app.schemas import (
     SerialNumberResponse,
     SerialNumberCreate,
     SerialNumberBatchCreate,
+    SerialNumberImportCreate,
     SerialNumberUpdate
 )
 from app.models import SerialNumber, InventoryItem
@@ -123,6 +124,47 @@ def create_range_serials(
         )
 
 
+@router.post("/{item_id}/serials/import", response_model=List[SerialNumberResponse], status_code=status.HTTP_201_CREATED)
+def import_serials(
+    item_id: int,
+    request: SerialNumberImportCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Import a list of existing serial numbers (for units that already have manufacturer serials).
+
+    Args:
+        item_id: The inventory item ID
+        request: SerialNumberImportCreate with serials list, batch_id, condition
+
+    Returns:
+        List of created SerialNumberResponse objects
+    """
+    item = db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Inventory item {item_id} not found")
+
+    if not request.serials:
+        raise HTTPException(status_code=400, detail="Serial list cannot be empty")
+
+    if len(request.serials) > 10000:
+        raise HTTPException(status_code=400, detail="Maximum 10000 serials per import")
+
+    try:
+        serials = serial_number_service.bulk_import_serials(
+            db=db,
+            item_id=item_id,
+            serials=request.serials,
+            batch_id=request.batch_id,
+            unit_condition=request.condition
+        )
+        return serials
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to import serials: {str(e)}")
+
+
 @router.get("/{item_id}/serials", response_model=List[SerialNumberResponse])
 def get_item_serials(
     item_id: int,
@@ -180,7 +222,7 @@ def get_item_serials(
     return serials
 
 
-@router.get("/{item_id}/serials/search/{serial_number}", response_model=SerialNumberResponse)
+@router.get("/{item_id}/serials/search-serial/{serial_number}", response_model=SerialNumberResponse)
 def search_serial_by_number(
     item_id: int,
     serial_number: str,

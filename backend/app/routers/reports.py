@@ -21,7 +21,8 @@ PERIOD_MAP = {
 @router.post("/generate")
 def generate_report(
     period: str = Query(..., pattern="^(weekly|monthly|quarterly)$"),
-    format: str = Query("pdf", pattern="^(pdf|excel)$"),
+    format: str = Query("pdf", pattern="^(pdf|excel|json)$"),
+    view: bool = Query(False, description="If true, serve inline for browser viewing instead of download"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -33,8 +34,11 @@ def generate_report(
     now = datetime.now(timezone.utc)
     period_start = now - delta
     analytics = get_analytics_service(db)
-    # Get analytics data with nested structure
     analytics_data = analytics.get_dashboard_overview(date_from=period_start, date_to=now)
+
+    if format == "json":
+        from fastapi.responses import JSONResponse
+        return JSONResponse(content=analytics_data)
 
     try:
         if format == "excel":
@@ -48,11 +52,12 @@ def generate_report(
             media_type = "application/pdf"
             filename = f"{period}_report_{now.strftime('%Y%m%d')}.pdf"
 
+        disposition = "inline" if view else "attachment"
         from fastapi.responses import Response
         return Response(
             content=content,
             media_type=media_type,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
@@ -64,7 +69,8 @@ def generate_custom_report(
     date_to: str = Query(..., description="End date (ISO format, e.g. 2026-12-31)"),
     item_ids: Optional[List[int]] = Query(None, description="Filter by inventory item IDs"),
     vendor_ids: Optional[List[int]] = Query(None, description="Filter by vendor IDs"),
-    format: str = Query("pdf", pattern="^(pdf|excel)$"),
+    format: str = Query("pdf", pattern="^(pdf|excel|json)$"),
+    view: bool = Query(False, description="If true, serve inline for browser viewing instead of download"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -97,6 +103,10 @@ def generate_custom_report(
         },
     }
 
+    if format == "json":
+        from fastapi.responses import JSONResponse
+        return JSONResponse(content=report_data)
+
     try:
         if format == "excel":
             gen = ExcelReportGenerator()
@@ -125,11 +135,12 @@ def generate_custom_report(
             media_type = "application/pdf"
             filename = f"custom_report_{end.strftime('%Y%m%d')}.pdf"
 
+        disposition = "inline" if view else "attachment"
         from fastapi.responses import Response
         return Response(
             content=content,
             media_type=media_type,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Custom report generation failed: {str(e)}")

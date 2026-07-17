@@ -145,7 +145,7 @@ class TestReservation:
         assert db_item.reserved_quantity == Decimal("50")
 
     def test_insufficient_stock_blocks_approval(self, client, db_session):
-        """Test that approval fails if stock is insufficient."""
+        """Test that order creation fails if stock is insufficient (reserved on creation)."""
         admin_role, _, _, _ = create_test_roles_and_perms(db_session)
         user = create_test_user(db_session, "admin@test.com", "password", admin_role)
         vendor = create_test_vendor(db_session)
@@ -159,14 +159,6 @@ class TestReservation:
                 "vendor_id": vendor.id,
                 "items": [{"item_id": item.id, "quantity_ordered": 50}],
             },
-            headers=headers
-        )
-        order_id = response.json()["id"]
-
-        self._progress_to_approved(client, db_session, user, order_id)
-
-        response = client.post(
-            f"/orders/{order_id}/approve",
             headers=headers
         )
 

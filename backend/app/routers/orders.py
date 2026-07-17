@@ -6,8 +6,10 @@ from app.core.database import get_db
 from app.core.auth import get_current_user, require_permission, require_admin
 from app.models import (
     User, Order, OrderItem, OrderTimeline, InventoryItem,
-    InventoryTransaction, Vendor, ApprovalRule, Role, Document, Settings, Notification
+    InventoryTransaction, Vendor, ApprovalRule, Role, Document, Settings, Notification,
+    SerialNumber
 )
+from app.services.serial_number_service import serial_number_service
 from app.services.audit_service import log_audit
 from app.services.inventory_service import reserve_stock as svc_reserve, release_reservation as svc_release, dispatch_stock as svc_dispatch
 from app.schemas import (
@@ -219,15 +221,50 @@ def create_order(
             detail="Vendor not found"
         )
     
-    # Verify all items exist
+    # Verify all items exist (exclude parent items — only orderable variants)
     item_ids = [item.item_id for item in order_data.items]
-    items = db.query(InventoryItem).filter(InventoryItem.id.in_(item_ids)).all()
+    items = db.query(InventoryItem).options(
+        selectinload(InventoryItem.serial_numbers)
+    ).filter(InventoryItem.id.in_(item_ids), InventoryItem.deleted_at == None).all()
     
     if len(items) != len(item_ids):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="One or more items not found"
         )
+    
+    # Validate serials: for each item, check serials if provided
+    for item_data in order_data.items:
+        item = next((i for i in items if i.id == item_data.item_id), None)
+        if not item:
+            continue
+        # Parent items cannot be ordered directly
+        item_children = db.query(InventoryItem).filter(
+            InventoryItem.parent_id == item.id,
+            InventoryItem.deleted_at == None
+        ).count()
+        if item_children > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Item '{item.name}' is a parent product and cannot be ordered directly. Select a variant instead."
+            )
+        # If serial_ids provided, validate count and assignment
+        if item_data.serial_ids:
+            if len(item_data.serial_ids) != int(item_data.quantity_ordered):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Item '{item.name}': number of serials ({len(item_data.serial_ids)}) must match quantity ({int(item_data.quantity_ordered)})"
+                )
+            serials = db.query(SerialNumber).filter(
+                SerialNumber.id.in_(item_data.serial_ids),
+                SerialNumber.item_id == item.id,
+                SerialNumber.assigned_to_order_id == None
+            ).all()
+            if len(serials) != len(item_data.serial_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"One or more serials for '{item.name}' are already assigned or don't belong to this item"
+                )
     
     max_retries = 3
     for attempt in range(max_retries):
@@ -246,7 +283,7 @@ def create_order(
             db.add(order)
             db.flush()
 
-            # Add items
+            # Add items and assign serials
             for item_data in order_data.items:
                 order_item = OrderItem(
                     order_id=order.id,
@@ -254,10 +291,20 @@ def create_order(
                     quantity_ordered=Decimal(str(item_data.quantity_ordered))
                 )
                 db.add(order_item)
+                db.flush()
+
+                # Assign serials to order if provided
+                if item_data.serial_ids:
+                    for sid in item_data.serial_ids:
+                        serial_number_service.assign_to_order(db, sid, order.id)
 
             # Add timeline entry
             add_timeline_entry(db, order, "created", current_user)
-
+            
+            # Reserve stock immediately on creation
+            db.flush()
+            reserve_stock(db, order, current_user)
+            
             db.commit()
             db.refresh(order)
             break
@@ -396,7 +443,7 @@ def update_order(
         order.delivery_address = order_data.delivery_address
     
     # Update vendor and items only if not yet signed
-    if order.status == OrderStatus.DRAFT:
+    if order.status in [OrderStatus.DRAFT, OrderStatus.PENDING_REQUISITION]:
         if order_data.vendor_id is not None:
             vendor = db.query(Vendor).filter(Vendor.id == order_data.vendor_id).first()
             if not vendor:
@@ -719,8 +766,7 @@ def approve_order(
     # Check approval matrix
     evaluate_approval_matrix(db, order, current_user)
     
-    # Reserve stock (all-or-nothing)
-    reserve_stock(db, order, current_user)
+    # Stock already reserved at order creation — no additional reservation needed
     
     order.status = OrderStatus.APPROVED
     add_timeline_entry(db, order, "approved", current_user)
@@ -846,8 +892,7 @@ def approve_with_signature(
             detail=f"Signed PDF generation failed: {str(e)}"
         )
     
-    # Reserve stock
-    reserve_stock(db, order, current_user)
+    # Stock already reserved at order creation
     
     # Update status
     order.status = OrderStatus.APPROVED
@@ -1038,9 +1083,16 @@ def cancel_order(
             detail=f"Cannot cancel order in {order.status} status"
         )
     
-    # Release reservation
-    if order.status == OrderStatus.APPROVED:
+    # Release reservation (stock is reserved from creation onwards)
+    if any(oi.quantity_reserved > 0 for oi in order.items):
         release_reservation(db, order)
+    
+    # Release serials
+    assigned_serials = db.query(SerialNumber).filter(
+        SerialNumber.assigned_to_order_id == order.id
+    ).all()
+    for s in assigned_serials:
+        serial_number_service.unassign_from_order(db, s.id)
     
     order.status = OrderStatus.CANCELLED
     add_timeline_entry(db, order, "cancelled", current_user)
@@ -1089,6 +1141,73 @@ def reopen_order(
     order.status = OrderStatus.DRAFT
     add_timeline_entry(db, order, "reopened", current_user, reason)
     log_audit(db, user_id=current_user.id, action="order.reopened", entity_type="order", entity_id=order.id)
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+@router.post("/{order_id}/return", response_model=OrderResponse)
+def return_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Return returnable items from a closed order (adds stock back)."""
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.deleted_at == None
+    ).options(
+        selectinload(Order.items).selectinload(OrderItem.item)
+    ).first()
+
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found"
+        )
+
+    if order.status != OrderStatus.CLOSED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Can only return items from closed orders"
+        )
+
+    returnable_items = [oi for oi in order.items if oi.item and oi.item.item_type == "returnable" and oi.quantity_dispatched > 0]
+    if not returnable_items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No returnable items with dispatched quantity found in this order"
+        )
+
+    from app.services.inventory_service import _lock_items
+    item_ids = list(set(oi.item_id for oi in returnable_items))
+    locked = _lock_items(db, item_ids)
+
+    for oi in returnable_items:
+        item = locked.get(oi.item_id)
+        if not item:
+            continue
+
+        return_qty = oi.quantity_dispatched
+        previous_qty = item.current_quantity
+        new_qty = previous_qty + return_qty
+
+        transaction = InventoryTransaction(
+            item_id=item.id,
+            transaction_type="return",
+            previous_quantity=previous_qty,
+            change_quantity=return_qty,
+            new_quantity=new_qty,
+            reference_type="return",
+            reference_id=order.id,
+            reason=f"Return from order {order.order_number}",
+            created_by=current_user.id,
+        )
+        db.add(transaction)
+        item.current_quantity = new_qty
+
+    add_timeline_entry(db, order, "returned", current_user, f"Returned {len(returnable_items)} item(s)")
+    log_audit(db, user_id=current_user.id, action="order.returned", entity_type="order", entity_id=order.id)
     db.commit()
     db.refresh(order)
     return order

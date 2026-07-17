@@ -4,7 +4,7 @@ import { Card, Button, ListLoadingState, StatusBadge } from '../../components/ui
 import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { EntityListCard } from '../../components/common/EntityListCard';
 import { formatDate, formatDateTime } from '../../utils/format';
-import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal, Loader, Barcode } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal, Loader, Barcode, Info } from 'lucide-react';
 import { SerialNumberInput } from '../../components/inventory/SerialNumberInput';
 import { SerialNumberImport } from '../../components/inventory/SerialNumberImport';
 import {
@@ -31,7 +31,7 @@ export const InventoryDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const itemId = id ? parseInt(id) : null;
 
-  const { data: item, isLoading, error } = useInventoryItem(itemId);
+  const { data: item, isLoading, error, refetch } = useInventoryItem(itemId);
   const { mutate: updateItem, isPending: isUpdating } = useUpdateInventoryItem();
   const { mutate: deleteItem, isPending: isDeleting } = useDeleteInventoryItem();
   const { mutate: restockItem, isPending: isRestocking } = useRestockItem();
@@ -41,9 +41,22 @@ export const InventoryDetailPage: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [formError, setFormError] = useState('');
-  const [editForm, setEditForm] = useState({ name: '', description: '', minimum_quantity: 0 });
+  const [editForm, setEditForm] = useState({
+    name: '',
+    sku: '',
+    barcode: '',
+    category_id: 0,
+    item_type: 'consumable',
+    description: '',
+    minimum_quantity: 0,
+    opening_quantity: 0,
+  });
   const [showSerialMgmt, setShowSerialMgmt] = useState(false);
-  const [serialMgmtMode, setSerialMgmtMode] = useState<'generate' | 'import'>('generate');
+  const [serialMgmtMode, setSerialMgmtMode] = useState<'generate' | 'import'>('import');
+  const [categories, setCategories] = useState(['Furniture', 'Supplies', 'Lighting', 'Electronics', 'Tools']);
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
+  const [notifyLowStock, setNotifyLowStock] = useState(false);
 
   // Restock / Adjust forms
   const [stockAction, setStockAction] = useState<'restock' | 'adjust' | null>(null);
@@ -54,8 +67,13 @@ export const InventoryDetailPage: React.FC = () => {
     if (!item) return;
     setEditForm({
       name: item.name,
+      sku: item.sku,
+      barcode: item.barcode || '',
+      category_id: item.category_id || 0,
+      item_type: item.item_type || 'consumable',
       description: item.description || '',
       minimum_quantity: Number(item.minimum_quantity),
+      opening_quantity: Number(item.current_quantity),
     });
     setFormError('');
     setIsEditMode(true);
@@ -69,14 +87,22 @@ export const InventoryDetailPage: React.FC = () => {
       setFormError('Item name is required');
       return;
     }
+    if (!editForm.sku.trim()) {
+      setFormError('SKU is required');
+      return;
+    }
 
     updateItem(
       {
         itemId,
         data: {
           name: editForm.name,
+          category_id: editForm.category_id || undefined,
+          item_type: editForm.item_type,
+          barcode: editForm.barcode || undefined,
           description: editForm.description || undefined,
           minimum_quantity: editForm.minimum_quantity,
+          current_quantity: editForm.opening_quantity,
         },
       },
       {
@@ -153,8 +179,14 @@ export const InventoryDetailPage: React.FC = () => {
     );
   }
 
-  const currentQty = Number(item.current_quantity);
-  const reservedQty = Number(item.reserved_quantity);
+  const children = item.children ?? [];
+  const isParent = children.length > 0;
+  const currentQty = isParent
+    ? children.reduce((sum: number, c: any) => sum + Number(c.current_quantity), 0)
+    : Number(item.current_quantity);
+  const reservedQty = isParent
+    ? children.reduce((sum: number, c: any) => sum + Number(c.reserved_quantity), 0)
+    : Number(item.reserved_quantity);
   const availableQty = currentQty - reservedQty;
   const minQty = Number(item.minimum_quantity);
   const transactions = item.transactions ?? [];
@@ -243,47 +275,241 @@ export const InventoryDetailPage: React.FC = () => {
         </Card>
       )}
 
+      {/* Child Variants (shown when item is a parent) */}
+      {!isEditMode && item.children && item.children.length > 0 && (
+        <Card padding="lg">
+          <h2 className="text-lg font-semibold text-neutral-900 mb-4">
+            Child Variants ({item.children.length})
+          </h2>
+          <div className="space-y-2">
+            {item.children.map((child) => (
+              <div
+                key={child.id}
+                className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg border border-neutral-200 hover:border-primary-300 transition-colors cursor-pointer"
+                onClick={() => navigate(`/inventory/${child.id}`)}
+              >
+                <div className="flex-1">
+                  <p className="font-medium text-neutral-900 text-sm">{child.name}</p>
+                  <p className="text-xs text-neutral-500">SKU: {child.sku}</p>
+                  {child.description && (
+                    <p className="text-xs text-neutral-600 mt-1">{child.description}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-right">
+                  <div>
+                    <p className="font-semibold text-neutral-900 text-sm">{Number(child.current_quantity)}</p>
+                    <p className="text-xs text-neutral-500">qty</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); navigate(`/inventory/${child.id}`); }}
+                    className="px-3 py-1.5 text-xs bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
+                  >
+                    View
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* Edit Form */}
       {isEditMode ? (
         <Card padding="lg">
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Edit Item</h2>
-          <form onSubmit={handleUpdate} className="space-y-4">
-            <div>
-              <label className={formLabel}>Item Name *</label>
-              <input
-                type="text"
-                value={editForm.name}
-                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                disabled={isUpdating}
-              />
+          <form onSubmit={handleUpdate} className="space-y-6">
+            {/* Section 1: Item Identity */}
+            <div className="space-y-4">
+              <h3 className="text-md font-medium text-neutral-900">Item Identity</h3>
+              <div>
+                <label className={formLabel}>Item Name *</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  placeholder="e.g., Office Chair"
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  disabled={isUpdating}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={formLabel}>SKU (Stock Keeping Unit) *</label>
+                  <input
+                    type="text"
+                    value={editForm.sku}
+                    onChange={(e) => setEditForm({ ...editForm, sku: e.target.value })}
+                    placeholder="e.g., OFC-001"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isUpdating}
+                  />
+                </div>
+                <div>
+                  <label className={formLabel}>Barcode (Optional)</label>
+                  <input
+                    type="text"
+                    value={editForm.barcode}
+                    onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })}
+                    placeholder="e.g., 1234567890"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isUpdating}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={formLabel}>Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  placeholder="Detailed description of the item..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  disabled={isUpdating}
+                />
+              </div>
             </div>
-            <div>
-              <label className={formLabel}>Description</label>
-              <textarea
-                value={editForm.description}
-                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                disabled={isUpdating}
-              />
+
+            {/* Section 2: Classification */}
+            <div className="space-y-4">
+              <h3 className="text-md font-medium text-neutral-900">Classification</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={formLabel}>Category</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={editForm.category_id}
+                      onChange={(e) => setEditForm({ ...editForm, category_id: Number(e.target.value) })}
+                      className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      disabled={isUpdating}
+                    >
+                      <option value="0">Select Category</option>
+                      {categories.map((cat, idx) => (
+                        <option key={idx} value={idx + 1}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCategory(!showAddCategory)}
+                      className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:bg-gray-400"
+                      disabled={isUpdating}
+                      title="Add new category"
+                    >
+                      <Plus size={18} />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className={formLabel}>Item Type</label>
+                  <select
+                    value={editForm.item_type}
+                    onChange={(e) => setEditForm({ ...editForm, item_type: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isUpdating}
+                  >
+                    <option value="consumable">Consumable (Single-use)</option>
+                    <option value="returnable">Returnable (Multi-use)</option>
+                  </select>
+                </div>
+              </div>
+              {showAddCategory && (
+                <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg space-y-2">
+                  <input
+                    type="text"
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newCategory.trim() && !categories.includes(newCategory)) {
+                          setCategories([...categories, newCategory]);
+                          setNewCategory('');
+                          setShowAddCategory(false);
+                        }
+                      }
+                    }}
+                    placeholder="Enter new category name"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isUpdating}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (newCategory.trim() && !categories.includes(newCategory)) {
+                          setCategories([...categories, newCategory]);
+                          setNewCategory('');
+                          setShowAddCategory(false);
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="flex-1 px-3 py-1 bg-primary-600 text-white rounded text-sm hover:bg-primary-700"
+                    >
+                      Add Category
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setShowAddCategory(false);
+                        setNewCategory('');
+                      }}
+                      disabled={isUpdating}
+                      className="flex-1 px-3 py-1 border border-neutral-300 text-neutral-700 rounded text-sm hover:bg-neutral-50"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="max-w-xs">
-              <label className={formLabel}>
-                Minimum Quantity
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={editForm.minimum_quantity}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, minimum_quantity: Number(e.target.value) })
-                }
-                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                disabled={isUpdating}
-              />
+
+            {/* Section 3: Stock Management */}
+            <div className="space-y-4">
+              <h3 className="text-md font-medium text-neutral-900">Stock Management</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={formLabel}>Available Quantity</label>
+                  <p className="text-xs text-neutral-500 mb-1">Initial stock level for this item</p>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editForm.opening_quantity}
+                    onChange={(e) => setEditForm({ ...editForm, opening_quantity: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isUpdating}
+                  />
+                </div>
+                <div>
+                  <label className={formLabel}>Safety Stock</label>
+                  <p className="text-xs text-neutral-500 mb-1">Minimum stock level to maintain</p>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editForm.minimum_quantity}
+                    onChange={(e) => setEditForm({ ...editForm, minimum_quantity: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isUpdating}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notifyLowStock}
+                    onChange={(e) => setNotifyLowStock(e.target.checked)}
+                    className="w-4 h-4 rounded border-neutral-300"
+                    disabled={isUpdating}
+                  />
+                  <span className="text-sm text-neutral-700">Notify me when stock falls below safety stock</span>
+                </label>
+              </div>
             </div>
-            <div className="flex gap-2 justify-end">
+
+            <div className="flex gap-2 justify-end pt-4 border-t border-neutral-200">
               <Button
                 type="button"
                 onClick={() => setIsEditMode(false)}
@@ -460,7 +686,7 @@ export const InventoryDetailPage: React.FC = () => {
                 <button
                   onClick={() => {
                     setShowSerialMgmt(false);
-                    setSerialMgmtMode('generate');
+                    setSerialMgmtMode('import');
                   }}
                   className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
                 >
@@ -468,28 +694,30 @@ export const InventoryDetailPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Mode Tabs */}
-              <div className="flex gap-4 mb-6 border-b border-gray-300">
-                <button
-                  onClick={() => setSerialMgmtMode('generate')}
-                  className={`px-4 py-3 font-medium border-b-2 transition ${
-                    serialMgmtMode === 'generate'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Generate New Serials
-                </button>
-                <button
-                  onClick={() => setSerialMgmtMode('import')}
-                  className={`px-4 py-3 font-medium border-b-2 transition ${
-                    serialMgmtMode === 'import'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Import Existing Serials
-                </button>
+              {/* Enable/Disable Serial Tracking */}
+              <div className="mb-6 p-4 bg-neutral-50 border border-neutral-200 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={serialMgmtMode === 'generate'}
+                    onChange={() => setSerialMgmtMode(serialMgmtMode === 'generate' ? 'import' : 'generate')}
+                    className="w-5 h-5 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <div>
+                    <span className="font-medium text-neutral-900">Generate serial numbers automatically</span>
+                    <span className="ml-1 group relative inline-block">
+                      <Info className="w-3.5 h-3.5 text-neutral-400 inline cursor-help align-text-bottom" />
+                      <span className="invisible group-hover:visible absolute left-0 top-full mt-1 w-64 p-2 bg-neutral-800 text-white text-xs rounded shadow-lg z-10">
+                        Check this if you want the system to generate serial numbers. Uncheck to manually enter or import existing manufacturer serials.
+                      </span>
+                    </span>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      {serialMgmtMode === 'generate'
+                        ? 'System will auto-generate serial numbers based on your settings below'
+                        : 'Enter serial numbers that your units already have (manufacturer serials)'}
+                    </p>
+                  </div>
+                </label>
               </div>
 
               {/* Generate Mode */}
@@ -497,20 +725,18 @@ export const InventoryDetailPage: React.FC = () => {
                 <SerialNumberInput
                   itemId={itemId}
                   onSerialsGenerated={() => {
-                    setShowSerialMgmt(false);
-                    // Optionally refetch item data to update serial list
+                    refetch();
                   }}
                   disabled={false}
                 />
               )}
 
               {/* Import Mode */}
-              {serialMgmtMode === 'import' && itemId && (
+              {serialMgmtMode !== 'generate' && itemId && (
                 <SerialNumberImport
                   itemId={itemId}
                   onSerialsImported={() => {
-                    setShowSerialMgmt(false);
-                    // Optionally refetch item data to update serial list
+                    refetch();
                   }}
                   disabled={false}
                 />
@@ -519,21 +745,18 @@ export const InventoryDetailPage: React.FC = () => {
           )}
 
           {/* Item Images */}
-          {item.images && item.images.length > 0 && (
+          {item.image_url && (
             <Card padding="lg">
               <h3 className="text-lg font-semibold text-neutral-900 mb-4">Item Images</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {item.images.map((img: any) => (
-                  <div key={img.id}>
-                    <p className="text-sm text-neutral-600 font-medium mb-2 capitalize">{img.image_type} Image</p>
-                    <img
-                      src={img.image_url}
-                      alt={`${item.name} - ${img.image_type}`}
-                      className="w-full h-48 object-cover rounded-lg border border-neutral-200"
-                    />
-                    <p className="text-xs text-neutral-500 mt-2">Uploaded {formatDate(img.uploaded_at)}</p>
-                  </div>
-                ))}
+                <div>
+                  <p className="text-sm text-neutral-600 font-medium mb-2 capitalize">Image</p>
+                  <img
+                    src={item.image_url}
+                    alt={item.name}
+                    className="w-full h-48 object-cover rounded-lg border border-neutral-200"
+                  />
+                </div>
               </div>
             </Card>
           )}

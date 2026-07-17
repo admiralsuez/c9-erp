@@ -116,6 +116,7 @@ class Vendor(Base):
     address = Column(Text)
     city = Column(String(100))
     state = Column(String(100))
+    pincode = Column(String(10))
     gst = Column(String(20))
     notes = Column(Text)
     vendor_token = Column(String(32), unique=True)  # Phase 4: DEPRECATED - kept for migration compat
@@ -211,6 +212,7 @@ class InventoryItem(Base):
     barcode = Column(String(100), unique=True, nullable=True)
     qr_code_data = Column(String(255))
     category_id = Column(Integer, ForeignKey("inventory_categories.id"))
+    parent_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=True)
     item_type = Column(String(20), nullable=False, default="consumable")  # consumable | returnable
     current_quantity = Column(Numeric(12, 2), default=0, nullable=False)
     reserved_quantity = Column(Numeric(12, 2), default=0, nullable=False)
@@ -228,11 +230,14 @@ class InventoryItem(Base):
     transactions = relationship("InventoryTransaction", back_populates="item")
     images = relationship("InventoryItemImage", back_populates="item", cascade="all, delete-orphan")
     serial_numbers = relationship("SerialNumber", back_populates="item", cascade="all, delete-orphan")
+    parent = relationship("InventoryItem", remote_side=[id], back_populates="children")
+    children = relationship("InventoryItem", back_populates="parent", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("idx_inventory_sku", "sku"),
         Index("idx_inventory_barcode", "barcode"),
         Index("idx_inventory_category", "category_id"),
+        Index("idx_inventory_parent", "parent_id"),
         Index("idx_inventory_deleted_at", "deleted_at"),
         Index("idx_inventory_low_stock", "current_quantity", "minimum_quantity"),
     )

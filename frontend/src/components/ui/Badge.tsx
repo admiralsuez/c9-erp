@@ -51,8 +51,13 @@ const statusVariants: Record<string, string> = {
   delivered: 'badge-success',
   closed: 'badge-neutral',
   cancelled: 'badge-error',
+  returned: 'bg-amber-100 text-amber-700',
   active: 'badge-success',
   inactive: 'badge-neutral',
+  parent: 'bg-purple-100 text-purple-700',
+  in_stock: 'badge-success',
+  low_stock: 'badge-warning',
+  out_of_stock: 'badge-error',
 };
 
 export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(

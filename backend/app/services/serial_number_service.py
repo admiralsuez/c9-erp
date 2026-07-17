@@ -448,6 +448,76 @@ class SerialNumberService:
             logger.error(f"Failed to delete serial: {str(e)}")
             raise Exception(f"Failed to delete serial: {str(e)}")
 
+    @staticmethod
+    def bulk_import_serials(
+        db: Session,
+        item_id: int,
+        serials: List[str],
+        batch_id: Optional[str] = None,
+        unit_condition: str = "new"
+    ) -> List[SerialNumber]:
+        """
+        Import a list of serial numbers (for units that already have manufacturer serials).
+
+        Args:
+            db: Database session
+            item_id: The inventory item ID
+            serials: List of serial number strings to import
+            batch_id: Optional batch ID
+            unit_condition: Condition of the units
+
+        Returns:
+            List of created SerialNumber objects
+        """
+        item = db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
+        if not item:
+            raise ValueError(f"Inventory item {item_id} not found")
+
+        if not serials:
+            raise ValueError("Serial list cannot be empty")
+
+        valid_conditions = {"new", "used", "damaged", "refurbished"}
+        if unit_condition not in valid_conditions:
+            raise ValueError(f"Invalid unit condition: {unit_condition}")
+
+        if not batch_id:
+            batch_id = f"import_{uuid.uuid4().hex[:8]}"
+
+        created = []
+        errors = []
+        for sn in serials:
+            sn = sn.strip()
+            if not sn:
+                continue
+            existing = db.query(SerialNumber).filter(
+                SerialNumber.serial_number == sn
+            ).first()
+            if existing:
+                errors.append(sn)
+                continue
+            serial = SerialNumber(
+                item_id=item_id,
+                serial_number=sn,
+                batch_id=batch_id,
+                unit_condition=unit_condition
+            )
+            db.add(serial)
+            created.append(serial)
+
+        if errors:
+            logger.warning(f"Skipped {len(errors)} duplicate serials: {', '.join(errors[:5])}...")
+
+        try:
+            db.commit()
+            for s in created:
+                db.refresh(s)
+            logger.info(f"Imported {len(created)} serial numbers for item {item_id}")
+            return created
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to import serials: {str(e)}")
+            raise Exception(f"Failed to import serials: {str(e)}")
+
 
 # Global instance
 serial_number_service = SerialNumberService()

@@ -40,8 +40,9 @@ export const useUpdateOrder = () => {
   return useMutation({
     mutationFn: ({ orderId, data }: { orderId: number; data: any }) =>
       ordersApi.update(orderId, data),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['order', vars.orderId] });
       toast.success('Order updated successfully');
     },
     onError: (err: Error) => {
@@ -102,3 +103,6 @@ export const useCloseOrder = () =>
 
 export const useCancelOrder = () =>
   useOrderLifecycleMutation((orderId: number) => ordersApi.cancel(orderId));
+
+export const useReturnOrder = () =>
+  useOrderLifecycleMutation((orderId: number) => ordersApi.returnOrder(orderId));

@@ -125,6 +125,7 @@ def create_vendor(
         address=vendor_data.address,
         city=vendor_data.city,
         state=vendor_data.state,
+        pincode=vendor_data.pincode,
         gst=vendor_data.gst,
         notes=vendor_data.notes
     )

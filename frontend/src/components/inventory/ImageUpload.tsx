@@ -182,6 +182,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               <Upload size={18} />
             </label>
             <button
+              type="button"
               onClick={() => handleDelete(imageType)}
               className="bg-red-500 hover:bg-red-600 text-white p-2 rounded transition"
               title="Delete image"
@@ -219,6 +220,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
             ) : (
               <>
                 <button
+                  type="button"
                   onClick={() => handleUpload(imageType)}
                   className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded font-medium transition"
                   disabled={disabled || image.uploading}
@@ -226,6 +228,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   Upload
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleDelete(imageType)}
                   className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded font-medium transition"
                   disabled={disabled}

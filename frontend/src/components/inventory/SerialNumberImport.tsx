@@ -8,7 +8,7 @@ interface SerialNumberImportProps {
 }
 
 export const SerialNumberImport: React.FC<SerialNumberImportProps> = ({
-  itemId,
+  itemId: _itemId,
   onSerialsImported,
   disabled = false,
 }) => {

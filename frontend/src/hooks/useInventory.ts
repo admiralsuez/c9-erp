@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { inventoryApi } from '../api/inventory';
-import type { RestockRequest, AdjustmentRequest, InventoryItemCreateRequest, InventoryItemUpdateRequest, InventoryItemResponse } from '../api/inventory';
+import type { RestockRequest, AdjustmentRequest, InventoryItemCreateRequest, InventoryItemBatchCreateRequest, InventoryItemUpdateRequest, InventoryItemResponse } from '../api/inventory';
 
 export const useInventory = (
   page: number = 1,
@@ -36,6 +36,20 @@ export const useCreateInventoryItem = (onSuccess?: (item: InventoryItemResponse)
       onSuccess?.(item);
     },
     onError: (err: Error) => toast.error(err.message || 'Failed to create item'),
+  });
+};
+
+export const useCreateInventoryItemBatch = (onSuccess?: (item: InventoryItemResponse) => void) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: InventoryItemBatchCreateRequest) => inventoryApi.createBatch(data),
+    onSuccess: (item) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'], exact: false });
+      toast.success('Parent item and children created successfully');
+      onSuccess?.(item);
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to create items'),
   });
 };
 

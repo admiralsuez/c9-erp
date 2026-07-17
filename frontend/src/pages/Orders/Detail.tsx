@@ -14,9 +14,14 @@ import {
   Truck,
   PackageCheck,
   Archive,
+  Undo2,
   XCircle,
   Eye,
   FileDown,
+  Pencil,
+  Save,
+  X,
+  Plus,
 } from 'lucide-react';
 import {
   useOrder,
@@ -27,8 +32,10 @@ import {
   useDeliverOrder,
   useCloseOrder,
   useCancelOrder,
+  useReturnOrder,
+  useUpdateOrder,
 } from '../../hooks/useOrders';
-import { useVendor } from '../../hooks/useVendors';
+import { useVendor, useVendors } from '../../hooks/useVendors';
 import { useInventory } from '../../hooks/useInventory';
 import { useUserNameMap } from '../../hooks/useUsers';
 import { useAuth } from '../../hooks/useAuth';
@@ -43,6 +50,7 @@ const STATUS_FLOW = [
   'dispatched',
   'delivered',
   'closed',
+  'returned',
 ];
 
 const formatStatus = (status: string) =>
@@ -82,6 +90,7 @@ export const OrderDetailPage: React.FC = () => {
   const deliverOrder = useDeliverOrder();
   const closeOrder = useCloseOrder();
   const cancelOrder = useCancelOrder();
+  const returnOrder = useReturnOrder();
   const uploadDocument = useUploadDocument();
   const { data: documents } = useOrderDocuments(orderId);
   const downloadDocument = useDownloadDocument();
@@ -110,6 +119,68 @@ export const OrderDetailPage: React.FC = () => {
   const [receiverNamePresent, setReceiverNamePresent] = useState(false);
   const deliverChallanRef = useRef<HTMLInputElement>(null);
 
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editItems, setEditItems] = useState<Array<{ item_id: number; quantity_ordered: number }>>([]);
+  const [editDeliveryAddress, setEditDeliveryAddress] = useState('');
+  const [editRemarks, setEditRemarks] = useState('');
+  const [editVendorId, setEditVendorId] = useState<number | ''>('');
+  const [showItemSelector, setShowItemSelector] = useState(false);
+  const [itemSearchQuery, setItemSearchQuery] = useState('');
+  const updateOrder = useUpdateOrder();
+  const { data: vendorsData } = useVendors(1, 100);
+
+  const startEditing = () => {
+    if (!order) return;
+    setEditItems(order.items.map((it: any) => ({ item_id: it.item_id, quantity_ordered: Number(it.quantity_ordered) })));
+    setEditDeliveryAddress(order.delivery_address || '');
+    setEditRemarks(order.remarks || '');
+    setEditVendorId(order.vendor_id);
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setShowItemSelector(false);
+    setItemSearchQuery('');
+  };
+
+  const handleSaveEdit = () => {
+    if (!order || !orderId) return;
+    setActionError('');
+    updateOrder.mutate(
+      {
+        orderId,
+        data: {
+          vendor_id: editVendorId || undefined,
+          items: editItems.map(i => ({ item_id: i.item_id, quantity_ordered: i.quantity_ordered })),
+          delivery_address: editDeliveryAddress || undefined,
+          remarks: editRemarks || undefined,
+        },
+      },
+      {
+        onSuccess: () => setIsEditing(false),
+        onError: (err: any) => onError(err, 'Failed to update order'),
+      }
+    );
+  };
+
+  const addEditItem = (itemId: number) => {
+    if (!editItems.some(i => i.item_id === itemId)) {
+      setEditItems([...editItems, { item_id: itemId, quantity_ordered: 1 }]);
+    }
+    setShowItemSelector(false);
+    setItemSearchQuery('');
+  };
+
+  const removeEditItem = (itemId: number) => {
+    setEditItems(editItems.filter(i => i.item_id !== itemId));
+  };
+
+  const updateEditItemQty = (itemId: number, quantity_ordered: number) => {
+    setEditItems(editItems.map(i => i.item_id === itemId ? { ...i, quantity_ordered } : i));
+  };
+
   const isActing =
     submitRequisition.isPending ||
     uploadSigned.isPending ||
@@ -120,10 +191,15 @@ export const OrderDetailPage: React.FC = () => {
     cancelOrder.isPending ||
     uploadDocument.isPending;
 
-  const itemMap: Record<number, { name: string; sku: string }> = {};
+  const itemMap: Record<number, { name: string; sku: string; item_type: string }> = {};
   for (const inv of inventoryData?.items ?? []) {
-    itemMap[inv.id] = { name: inv.name, sku: inv.sku };
+    itemMap[inv.id] = { name: inv.name, sku: inv.sku, item_type: inv.item_type };
   }
+
+  const hasReturnableItems = order ? order.items.some((oi: any) => {
+    const info = itemMap[oi.item_id];
+    return info?.item_type === 'returnable' && Number(oi.quantity_dispatched) > 0;
+  }) : false;
 
   const userLabel = (userId?: number | null) =>
     userId ? userNames[userId] || `User #${userId}` : 'Unknown';
@@ -264,7 +340,7 @@ export const OrderDetailPage: React.FC = () => {
   }
 
   const statusIndex = STATUS_FLOW.indexOf(order.status);
-  const isTerminal = order.status === 'closed' || order.status === 'cancelled';
+  const isTerminal = order.status === 'closed' || order.status === 'cancelled' || order.status === 'returned';
   const timeline = [...(order.timeline_entries ?? [])].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
@@ -294,6 +370,43 @@ export const OrderDetailPage: React.FC = () => {
 
         {/* Lifecycle Action Buttons */}
         <div className="flex gap-2 flex-wrap">
+          {/* Edit / Save / Cancel */}
+          {isEditing ? (
+            <>
+              <Button
+                onClick={handleSaveEdit}
+                disabled={updateOrder.isPending}
+                className="flex items-center gap-2 bg-success text-white hover:bg-success/90 disabled:opacity-50"
+              >
+                {updateOrder.isPending ? (
+                  <Loader className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {updateOrder.isPending ? 'Saving...' : 'Save Changes'}
+              </Button>
+              <Button
+                onClick={cancelEditing}
+                disabled={updateOrder.isPending}
+                className="flex items-center gap-2 border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </Button>
+            </>
+          ) : (
+            (order.status === 'draft' || order.status === 'pending_requisition') && (
+              <Button
+                onClick={startEditing}
+                disabled={isActing}
+                className="flex items-center gap-2 border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+              >
+                <Pencil className="w-4 h-4" />
+                Edit
+              </Button>
+            )
+          )}
+
           {order.status === 'draft' && (
             <Button
               onClick={() => setApproverModalOpen(true)}
@@ -421,6 +534,27 @@ export const OrderDetailPage: React.FC = () => {
                 <Archive className="w-4 h-4" />
               )}
               Close Order
+            </Button>
+          )}
+
+          {order.status === 'closed' && hasReturnableItems && (
+            <Button
+              onClick={() =>
+                runAction(() =>
+                  returnOrder.mutate(order.id, {
+                    onError: (err: any) => onError(err, 'Failed to return items'),
+                  })
+                )
+              }
+              disabled={isActing}
+              className="flex items-center gap-2 bg-warning text-white hover:bg-warning/90 disabled:opacity-50"
+            >
+              {returnOrder.isPending ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <Undo2 className="w-4 h-4" />
+              )}
+              Return Order
             </Button>
           )}
 
@@ -788,9 +922,23 @@ export const OrderDetailPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <p className="text-sm text-neutral-600 font-medium mb-1">Vendor</p>
-            <p className="text-neutral-900">{vendor?.name || `Vendor #${order.vendor_id}`}</p>
-            {vendor?.contact_person && (
-              <p className="text-sm text-neutral-500">Contact: {vendor.contact_person}</p>
+            {isEditing ? (
+              <select
+                value={editVendorId}
+                onChange={(e) => setEditVendorId(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+              >
+                {(vendorsData?.items ?? []).map((v: any) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            ) : (
+              <>
+                <p className="text-neutral-900">{vendor?.name || `Vendor #${order.vendor_id}`}</p>
+                {vendor?.contact_person && (
+                  <p className="text-sm text-neutral-500">Contact: {vendor.contact_person}</p>
+                )}
+              </>
             )}
           </div>
           <div>
@@ -802,11 +950,29 @@ export const OrderDetailPage: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-neutral-600 font-medium mb-1">Delivery Address</p>
-            <p className="text-neutral-900">{order.delivery_address || '—'}</p>
+            {isEditing ? (
+              <textarea
+                value={editDeliveryAddress}
+                onChange={(e) => setEditDeliveryAddress(e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+              />
+            ) : (
+              <p className="text-neutral-900">{order.delivery_address || '—'}</p>
+            )}
           </div>
           <div>
             <p className="text-sm text-neutral-600 font-medium mb-1">Remarks</p>
-            <p className="text-neutral-900">{order.remarks || '—'}</p>
+            {isEditing ? (
+              <textarea
+                value={editRemarks}
+                onChange={(e) => setEditRemarks(e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+              />
+            ) : (
+              <p className="text-neutral-900">{order.remarks || '—'}</p>
+            )}
           </div>
         </div>
       </Card>
@@ -949,41 +1115,123 @@ export const OrderDetailPage: React.FC = () => {
                 <th className="text-right py-2 px-3 font-semibold text-neutral-700">Ordered</th>
                 <th className="text-right py-2 px-3 font-semibold text-neutral-700">Reserved</th>
                 <th className="text-right py-2 px-3 font-semibold text-neutral-700">Dispatched</th>
+                {isEditing && <th className="text-right py-2 px-3 font-semibold text-neutral-700"></th>}
               </tr>
             </thead>
             <tbody>
-              {order.items.map((orderItem: any) => {
-                const info = itemMap[orderItem.item_id];
+              {(isEditing ? editItems : order.items).map((entry: any, idx: number) => {
+                const itemId = isEditing ? entry.item_id : entry.item_id;
+                const info = itemMap[itemId];
+                const orderItem = isEditing ? null : entry;
                 return (
-                  <tr key={orderItem.id} className="border-b border-neutral-100">
+                  <tr key={isEditing ? `${itemId}-${idx}` : orderItem.id} className="border-b border-neutral-100">
                     <td className="py-2 px-3">
                       <button
-                        onClick={() => navigate(`/inventory/${orderItem.item_id}`)}
+                        onClick={() => navigate(`/inventory/${itemId}`)}
                         className="text-primary-600 hover:underline text-left"
                       >
-                        {info?.name || `Item #${orderItem.item_id}`}
+                        {info?.name || `Item #${itemId}`}
                       </button>
                     </td>
                     <td className="py-2 px-3 font-mono text-neutral-600">{info?.sku || '—'}</td>
-                    <td className="py-2 px-3 text-right text-neutral-900">
-                      {Number(orderItem.quantity_ordered)}
+                    <td className="py-2 px-3 text-right">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={entry.quantity_ordered}
+                          onChange={(e) => updateEditItemQty(itemId, Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-20 px-2 py-1 border border-neutral-300 rounded text-right text-sm"
+                        />
+                      ) : (
+                        <span className="text-neutral-900">{Number(orderItem.quantity_ordered)}</span>
+                      )}
                     </td>
                     <td className="py-2 px-3 text-right text-neutral-900">
-                      {Number(orderItem.quantity_reserved)}
+                      {isEditing ? '—' : Number(orderItem.quantity_reserved)}
                     </td>
                     <td className="py-2 px-3 text-right text-neutral-900">
-                      {Number(orderItem.quantity_dispatched)}
+                      {isEditing ? '—' : Number(orderItem.quantity_dispatched)}
                     </td>
+                    {isEditing && (
+                      <td className="py-2 px-3 text-right">
+                        <button
+                          onClick={() => removeEditItem(itemId)}
+                          className="text-red-500 hover:text-red-700 text-xs"
+                          title="Remove item"
+                        >
+                          <X size={16} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-neutral-500 mt-3">
-          Reserved = stock held for this order after approval. Dispatched = stock deducted from
-          inventory when the order ships.
-        </p>
+
+        {isEditing && (
+          <div className="mt-4 space-y-3">
+            {showItemSelector ? (
+              <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-200">
+                <input
+                  type="text"
+                  placeholder="Search items..."
+                  value={itemSearchQuery}
+                  onChange={(e) => setItemSearchQuery(e.target.value)}
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm mb-2"
+                  autoFocus
+                />
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {(inventoryData?.items ?? [])
+                    .filter((inv: any) => {
+                      if (!itemSearchQuery) return true;
+                      const q = itemSearchQuery.toLowerCase();
+                      return inv.name.toLowerCase().includes(q) || inv.sku.toLowerCase().includes(q);
+                    })
+                    .map((inv: any) => (
+                      <button
+                        key={inv.id}
+                        type="button"
+                        onClick={() => addEditItem(inv.id)}
+                        disabled={editItems.some(i => i.item_id === inv.id)}
+                        className="w-full text-left px-3 py-2 rounded text-sm hover:bg-primary-50 hover:text-primary-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {inv.name} <span className="text-neutral-400">({inv.sku})</span>
+                      </button>
+                    ))}
+                  {(!inventoryData?.items || inventoryData.items.length === 0) && (
+                    <p className="text-sm text-neutral-500 p-2">No items found</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setShowItemSelector(false); setItemSearchQuery(''); }}
+                  className="text-sm text-neutral-500 hover:text-neutral-700 mt-1"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <Button
+                onClick={() => setShowItemSelector(true)}
+                className="flex items-center gap-2 text-sm border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+              >
+                <Plus size={16} />
+                Add Item
+              </Button>
+            )}
+          </div>
+        )}
+
+        {!isEditing && (
+          <p className="text-xs text-neutral-500 mt-3">
+            Reserved = stock held for this order after approval. Dispatched = stock deducted from
+            inventory when the order ships.
+          </p>
+        )}
       </Card>
 
       {/* Timeline */}

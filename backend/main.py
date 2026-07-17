@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.database import engine, Base
@@ -10,9 +10,46 @@ import logging
 import threading
 from datetime import datetime, timezone
 import os
+import glob
+import time
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# --- Logging setup: rotated file logs (max 5) + console ---
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Rotate: keep only the 5 newest files, delete oldest (best-effort on Windows)
+_log_files = sorted(glob.glob(os.path.join(LOG_DIR, "c9erp_*.log")))
+while len(_log_files) >= 5:
+    try:
+        os.unlink(_log_files.pop(0))
+    except PermissionError:
+        # File in use by another process (uvicorn reload workers on Windows)
+        _log_files.pop(0)
+        continue
+
+_log_path = os.path.join(LOG_DIR, f"c9erp_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.log")
+
+# Configure root logger so ALL modules (orders, inventory, etc.) write to same file
+_root = logging.getLogger()
+_root.setLevel(logging.DEBUG)
+
+_formatter = logging.Formatter(
+    "%(asctime)s | %(levelname)-7s | %(name)-16s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+_fh = logging.FileHandler(_log_path, encoding="utf-8")
+_fh.setLevel(logging.DEBUG)
+_fh.setFormatter(_formatter)
+_root.addHandler(_fh)
+
+_ch = logging.StreamHandler()
+_ch.setLevel(logging.INFO)
+_ch.setFormatter(_formatter)
+_root.addHandler(_ch)
+
+logger = logging.getLogger("main")
+logger.info(f"Log file: {_log_path}")
 
 
 @asynccontextmanager
@@ -85,10 +122,67 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global exception handler to always return JSON (with CORS) on 500
+# Request-logging middleware — logs every API hit with request body
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.time()
+    client = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "?")
+    auth = request.headers.get("authorization", "")
+    has_token = "Bearer" in auth if auth else False
+
+    skip = request.url.path in ("/favicon.ico", "/health")
+    if not skip:
+        body_snippet = ""
+        if request.method in ("POST", "PUT", "PATCH"):
+            try:
+                raw = await request.body()
+                if raw:
+                    decoded = raw.decode("utf-8", errors="replace")
+                    if len(decoded) > 3000:
+                        decoded = decoded[:3000] + "…[truncated]"
+                    body_snippet = f" BODY={decoded}"
+                request._body = raw
+            except Exception:
+                body_snippet = " BODY=[unreadable]"
+
+        logger.info(
+            f"IN  | {client} | {request.method} {request.url.path} | "
+            f"auth={'yes' if has_token else 'no'}{body_snippet}"
+        )
+
+    response = await call_next(request)
+    elapsed_ms = (time.time() - start) * 1000
+
+    if not skip:
+        status = response.status_code
+        level = logging.WARNING if status >= 400 else logging.INFO
+        logger.log(
+            level,
+            f"OUT | {client} | {request.method} {request.url.path} | "
+            f"{status} | {elapsed_ms:.1f}ms"
+        )
+
+    return response
+
+# Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    client = request.client.host if request.client else "unknown"
+    if isinstance(exc, FastAPIHTTPException):
+        logger.warning(
+            f"HTTP {exc.status_code} | {request.method} {request.url.path} "
+            f"from {client} | {exc.detail}"
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+        )
+    logger.error(
+        f"UNHANDLED | {request.method} {request.url.path} "
+        f"from {client} | {exc}",
+        exc_info=True
+    )
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"},

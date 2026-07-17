@@ -12,8 +12,10 @@ from app.schemas import LoginRequest, TokenResponse, RefreshTokenRequest, UserRe
 from collections import defaultdict
 import hashlib
 import time
+import logging
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = logging.getLogger(__name__)
 
 # Simple in-memory rate limiter (per IP)
 _login_attempts: dict = defaultdict(list)
@@ -46,10 +48,13 @@ def login(request: LoginRequest, http_request: Request, db: Session = Depends(ge
     ).first()
     
     if not user or not verify_password(request.password, user.password_hash):
+        logger.warning("LOGIN FAIL %s from %s", request.email, ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
+
+    logger.info("LOGIN OK %s (%s) from %s", request.email, user.full_name, ip)
     
     # Upgrade legacy SHA-256 hashes to bcrypt on successful login
     if not user.password_hash.startswith(('$2b$', '$2a$', '$2y$')):

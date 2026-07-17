@@ -57,6 +57,7 @@ export interface DispatchRequestBody {
 export interface OrderItemRequest {
   item_id: number;
   quantity_ordered: number;
+  serial_ids?: number[];
 }
 
 export interface OrderCreateRequest {
@@ -179,6 +180,11 @@ export const ordersApi = {
 
   cancel: async (orderId: number): Promise<OrderResponse> => {
     const response = await apiClient.post<OrderResponse>(`/orders/${orderId}/cancel`);
+    return response.data;
+  },
+
+  returnOrder: async (orderId: number): Promise<OrderResponse> => {
+    const response = await apiClient.post<OrderResponse>(`/orders/${orderId}/return`);
     return response.data;
   },
 };

@@ -18,6 +18,7 @@ export interface VendorResponse {
   address: string;
   city: string;
   state: string;
+  pincode: string;
   gst: string;
   notes: string;
   is_active: boolean;
@@ -34,6 +35,7 @@ export interface VendorCreateRequest {
   address?: string;
   city?: string;
   state?: string;
+  pincode?: string;
   gst?: string;
   notes?: string;
 }

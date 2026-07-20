@@ -62,7 +62,7 @@ services:
       dockerfile: Dockerfile
     container_name: erp_frontend
     ports:
-      - "${FRONTEND_PORT:-5173}:3000"
+      - "${FRONTEND_PORT:-5173}:5173"
     depends_on:
       - api
     volumes:

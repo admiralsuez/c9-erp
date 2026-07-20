@@ -310,6 +310,8 @@ class InventoryItemResponse(InventoryItemBase):
     updated_at: datetime
     children: List['InventoryItemResponse'] = []
     attributes: Optional[dict] = None
+    images: List['InventoryItemImageResponse'] = []
+    serial_numbers: List['SerialNumberResponse'] = []
 
     model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
     
@@ -332,8 +334,6 @@ class InventoryItemResponse(InventoryItemBase):
 
 class InventoryItemDetailResponse(InventoryItemResponse):
     transactions: List[InventoryTransactionResponse] = []
-    images: List['InventoryItemImageResponse'] = []
-    serial_numbers: List['SerialNumberResponse'] = []
     parent: Optional['InventoryItemResponse'] = None
 
 
@@ -458,6 +458,7 @@ class OrderItemResponse(BaseModel):
     quantity_damaged: float = 0
     created_at: datetime
     item: Optional['InventoryItemResponse'] = None
+    serial_ids: Optional[List[int]] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -615,3 +616,11 @@ class SignatureResponse(BaseModel):
 
 class SignatureUpdate(BaseModel):
     signature_data: str
+
+
+# ============ RESOLVE FORWARD REFERENCES (Pydantic v2) ============
+TokenResponse.model_rebuild()
+OrderResponse.model_rebuild()
+OrderItemResponse.model_rebuild()
+InventoryItemResponse.model_rebuild()
+InventoryItemDetailResponse.model_rebuild()

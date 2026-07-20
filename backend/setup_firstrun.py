@@ -17,16 +17,32 @@ import os
 import sys
 from pathlib import Path
 
-# Load environment from .env.local
-env_path = Path(__file__).parent / ".env.local"
-if env_path.exists():
-    from dotenv import load_dotenv
-    load_dotenv(env_path)
+# Load environment from .env.local ONLY if DATABASE_URL is not already set
+# (Prevents stale local config from shadowing production env vars)
+if not os.getenv("DATABASE_URL"):
+    env_path = Path(__file__).parent / ".env.local"
+    if env_path.exists():
+        from dotenv import load_dotenv
+        load_dotenv(env_path)
+        print("[*] Loaded .env.local (DATABASE_URL was not set)")
+else:
+    print("[*] DATABASE_URL already set in environment; skipping .env.local")
 
 from app.core.database import SessionLocal, engine, Base
 from app.models import Role, User, Permission, RolePermission, Settings
 from app.core.auth import hash_password
+from app.core.config import settings
 from decimal import Decimal
+
+# Log which database we're connecting to (host only, password redacted)
+db_url = settings.DATABASE_URL
+if "@" in db_url:
+    # Redact password: postgresql://user:PASSWORD@host:port/db
+    parts = db_url.split("@")
+    db_display = f"{parts[0].split(':')[0]}://***@{parts[1]}"
+else:
+    db_display = db_url
+print(f"[*] Using database: {db_display}")
 
 def create_tables():
     """Create all database tables."""

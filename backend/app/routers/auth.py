@@ -38,6 +38,7 @@ def _check_login_rate_limit(ip: str):
 @router.post("/login", response_model=TokenResponse)
 def login(request: LoginRequest, http_request: Request, db: Session = Depends(get_db)):
     """Login with email and password, return access + refresh tokens."""
+    print("reached herrrrrrrrrrrrrrrrrrrrrrrrrrrrrr")
     ip = http_request.client.host if http_request.client else "unknown"
     _check_login_rate_limit(ip)
     

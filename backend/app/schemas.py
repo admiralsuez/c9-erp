@@ -310,8 +310,6 @@ class InventoryItemResponse(InventoryItemBase):
     updated_at: datetime
     children: List['InventoryItemResponse'] = []
     attributes: Optional[dict] = None
-    images: List['InventoryItemImageResponse'] = []
-    serial_numbers: List['SerialNumberResponse'] = []
 
     model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
     
@@ -334,6 +332,8 @@ class InventoryItemResponse(InventoryItemBase):
 
 class InventoryItemDetailResponse(InventoryItemResponse):
     transactions: List[InventoryTransactionResponse] = []
+    images: List['InventoryItemImageResponse'] = []
+    serial_numbers: List['SerialNumberResponse'] = []
     parent: Optional['InventoryItemResponse'] = None
 
 

@@ -21,6 +21,8 @@ export interface SettingsResponse {
   pdf_header_text?: string;
   pdf_footer_text?: string;
   default_low_stock_threshold: number;
+  ho_prefix: string;
+  llf_prefix: string;
   updated_at: string;
 }
 
@@ -35,6 +37,8 @@ export interface SettingsUpdateRequest {
   pdf_header_text?: string;
   pdf_footer_text?: string;
   default_low_stock_threshold?: number;
+  ho_prefix?: string;
+  llf_prefix?: string;
 }
 
 // ============ USERS ============
@@ -49,6 +53,7 @@ export interface UserResponse {
   full_name: string;
   email: string;
   department?: string;
+  location?: string;
   role: RoleResponse;
   is_active: boolean;
   created_at: string;
@@ -70,6 +75,7 @@ export interface UserCreateRequest {
   password: string;
   role_id: number;
   department?: string;
+  location?: string;
 }
 
 export interface UserUpdateRequest {
@@ -77,6 +83,7 @@ export interface UserUpdateRequest {
   email?: string;
   department?: string;
   role_id?: number;
+  location?: string;
 }
 
 // ============ WAREHOUSE ============
@@ -137,6 +144,29 @@ export interface PermissionResponse {
   id: number;
   code: string;
   description?: string;
+}
+
+// ============ APPROVAL RULES ============
+export interface ApprovalRuleResponse {
+  id: number;
+  name: string;
+  rule_type: string;
+  condition_json: Record<string, any>;
+  approver_role_id?: number;
+  approver_user_id?: number;
+  priority: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApprovalRuleCreateRequest {
+  name: string;
+  rule_type: string;
+  condition_json: Record<string, any>;
+  approver_role_id?: number;
+  approver_user_id?: number;
+  priority?: number;
 }
 
 // ============ ROLES ============
@@ -220,6 +250,15 @@ export const settingsApi = {
     return response.data;
   },
 
+  uploadLogo: async (file: File): Promise<SettingsResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await apiClient.post<SettingsResponse>('/settings/logo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
   // Users
   listUsers: async (
     page: number = 1,
@@ -256,6 +295,29 @@ export const settingsApi = {
   restoreUser: async (userId: number): Promise<UserResponse> => {
     const response = await apiClient.post<UserResponse>(`/users/${userId}/restore`, {});
     return response.data;
+  },
+
+  // Approval Rules
+  listApprovalRules: async (page: number = 1, size: number = 100): Promise<ApprovalRuleResponse[]> => {
+    const params = new URLSearchParams();
+    params.append('page', page.toString());
+    params.append('size', size.toString());
+    const response = await apiClient.get<ApprovalRuleResponse[]>(`/approval-rules?${params.toString()}`);
+    return response.data;
+  },
+
+  createApprovalRule: async (data: ApprovalRuleCreateRequest): Promise<ApprovalRuleResponse> => {
+    const response = await apiClient.post<ApprovalRuleResponse>('/approval-rules', data);
+    return response.data;
+  },
+
+  updateApprovalRule: async (ruleId: number, data: ApprovalRuleCreateRequest): Promise<ApprovalRuleResponse> => {
+    const response = await apiClient.patch<ApprovalRuleResponse>(`/approval-rules/${ruleId}`, data);
+    return response.data;
+  },
+
+  deleteApprovalRule: async (ruleId: number): Promise<void> => {
+    await apiClient.delete(`/approval-rules/${ruleId}`);
   },
 
   // Approvers (for order approval selection)

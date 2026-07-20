@@ -54,6 +54,7 @@ class UserBase(BaseModel):
     full_name: str
     email: EmailStr
     department: Optional[str] = None
+    location: str = "HO"
 
 
 class UserCreate(UserBase):
@@ -66,6 +67,7 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     department: Optional[str] = None
     role_id: Optional[int] = None
+    location: Optional[str] = None
 
 
 class UserResponse(UserBase):
@@ -92,6 +94,8 @@ class SettingsResponse(BaseModel):
     pdf_header_text: Optional[str] = None
     pdf_footer_text: Optional[str] = None
     default_low_stock_threshold: float
+    ho_prefix: str = "HO"
+    llf_prefix: str = "LLF"
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -108,12 +112,15 @@ class SettingsUpdate(BaseModel):
     pdf_header_text: Optional[str] = None
     pdf_footer_text: Optional[str] = None
     default_low_stock_threshold: Optional[float] = None
+    ho_prefix: Optional[str] = None
+    llf_prefix: Optional[str] = None
 
 
 # ============ VENDORS ============
 class VendorBase(BaseModel):
     name: str
     vendor_type: Optional[str] = None
+    vendor_type_id: Optional[int] = None
     contact_person: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -132,6 +139,7 @@ class VendorCreate(VendorBase):
 class VendorUpdate(BaseModel):
     name: Optional[str] = None
     vendor_type: Optional[str] = None
+    vendor_type_id: Optional[int] = None
     contact_person: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -155,6 +163,17 @@ class VendorResponse(VendorBase):
 class VendorSummaryResponse(VendorResponse):
     total_orders: int = 0
     total_quantity_ordered: float = 0
+
+
+class VendorTypeResponse(BaseModel):
+    id: int
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class VendorTypeCreate(BaseModel):
+    name: str
 
 
 # ============ INVENTORY CATEGORIES ============
@@ -418,9 +437,24 @@ class OrderItemResponse(BaseModel):
     quantity_ordered: float
     quantity_reserved: float
     quantity_dispatched: float
+    quantity_returned: float = 0
+    quantity_damaged: float = 0
     created_at: datetime
+    item: Optional['InventoryItemResponse'] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ReturnItemRequest(BaseModel):
+    order_item_id: int
+    item_id: int
+    quantity_returned: float
+    quantity_damaged: float = 0
+    reason: Optional[str] = None
+
+
+class ReturnOrderRequest(BaseModel):
+    items: List[ReturnItemRequest]
 
 
 class OrderCreateRequest(BaseModel):
@@ -460,6 +494,7 @@ class OrderResponse(BaseModel):
     updated_at: datetime
     items: List[OrderItemResponse] = []
     timeline_entries: List[OrderTimelineEntryResponse] = []
+    vendor: Optional['VendorResponse'] = None
 
     model_config = ConfigDict(from_attributes=True)
 

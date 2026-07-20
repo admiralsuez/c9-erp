@@ -15,7 +15,7 @@ from app.services.inventory_service import reserve_stock as svc_reserve, release
 from app.schemas import (
     OrderCreateRequest, OrderUpdateRequest, OrderResponse, OrderItemResponse,
     DispatchRequestBody, ApprovalRuleCreateRequest, ApprovalRuleResponse,
-    OrderTimelineEntryResponse,
+    OrderTimelineEntryResponse, ReturnOrderRequest,
 )
 from typing import List
 from decimal import Decimal
@@ -64,23 +64,20 @@ VALID_TRANSITIONS = {
 }
 
 
-def generate_order_number(db: Session, settings_format: str) -> str:
-    """Generate unique order number using settings format with safe concurrency."""
+def generate_order_number(db: Session, settings_format: str, location: str = "HO") -> str:
+    """Generate unique order number using settings format with location prefix."""
     year = datetime.now(timezone.utc).year
     
-    # Use SELECT FOR UPDATE to prevent race conditions
-    last_order = db.query(Order).filter(
-        func.extract('year', Order.created_at) == year,
-        Order.deleted_at == None
-    ).order_by(Order.id.desc()).with_for_update().first()
+    settings = db.query(Settings).first()
+    prefix = (settings.llf_prefix if location == "LLF" else settings.ho_prefix) if settings else ("LLF" if location == "LLF" else "HO")
     
     count = db.query(func.count(Order.id)).filter(
         func.extract('year', Order.created_at) == year,
         Order.deleted_at == None
     ).scalar() or 0
-    seq = (last_order.id + count) if last_order else 1
+    seq = count + 1
     
-    return f"ORD-{year}-{seq:06d}"
+    return f"{prefix}-ORD-{year}-{seq:06d}"
 
 
 def add_timeline_entry(db: Session, order: Order, action: str, user: User, comments: str = None):
@@ -269,7 +266,7 @@ def create_order(
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            order_number = generate_order_number(db, "ORD-{YYYY}-{SEQ}")
+            order_number = generate_order_number(db, "ORD-{YYYY}-{SEQ}", current_user.location or "HO")
 
             # Create order
             order = Order(
@@ -608,6 +605,7 @@ def submit_requisition(
     )
     db.add(notification)
     
+    log_audit(db, user_id=current_user.id, action="order.submitted", entity_type="order", entity_id=order.id)
     db.commit()
     db.refresh(order)
     
@@ -617,8 +615,6 @@ def submit_requisition(
     except Exception as e:
         logger.warning("Email send failed for order %s: %s", order.id, str(e))
     
-    log_audit(db, user_id=current_user.id, action="order.submitted", entity_type="order", entity_id=order.id)
-    db.commit()
     return order
 
 
@@ -770,6 +766,7 @@ def approve_order(
     
     order.status = OrderStatus.APPROVED
     add_timeline_entry(db, order, "approved", current_user)
+    log_audit(db, user_id=current_user.id, action="order.approved", entity_type="order", entity_id=order.id)
     db.commit()
     db.refresh(order)
     
@@ -779,8 +776,6 @@ def approve_order(
     except Exception as e:
         logger.warning("Email send failed for order %s: %s", order.id, str(e))
     
-    log_audit(db, user_id=current_user.id, action="order.approved", entity_type="order", entity_id=order.id)
-    db.commit()
     return order
 
 
@@ -973,6 +968,7 @@ def dispatch_order(
     
     order.status = OrderStatus.DISPATCHED
     add_timeline_entry(db, order, "dispatched", current_user)
+    log_audit(db, user_id=current_user.id, action="order.dispatched", entity_type="order", entity_id=order.id)
     db.commit()
     db.refresh(order)
     
@@ -982,8 +978,6 @@ def dispatch_order(
     except Exception as e:
         logger.warning("Email send failed for order %s: %s", order.id, str(e))
     
-    log_audit(db, user_id=current_user.id, action="order.dispatched", entity_type="order", entity_id=order.id)
-    db.commit()
     return order
 
 
@@ -1096,6 +1090,7 @@ def cancel_order(
     
     order.status = OrderStatus.CANCELLED
     add_timeline_entry(db, order, "cancelled", current_user)
+    log_audit(db, user_id=current_user.id, action="order.cancelled", entity_type="order", entity_id=order.id)
     db.commit()
     db.refresh(order)
     
@@ -1105,8 +1100,6 @@ def cancel_order(
     except Exception as e:
         logger.warning("Email send failed for order %s: %s", order.id, str(e))
     
-    log_audit(db, user_id=current_user.id, action="order.cancelled", entity_type="order", entity_id=order.id)
-    db.commit()
     return order
 
 
@@ -1149,64 +1142,75 @@ def reopen_order(
 @router.post("/{order_id}/return", response_model=OrderResponse)
 def return_order(
     order_id: int,
+    body: ReturnOrderRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Return returnable items from a closed order (adds stock back)."""
+    """Return items from a closed order with per-item quantities, damaged tracking, and photos."""
     order = db.query(Order).filter(
         Order.id == order_id,
         Order.deleted_at == None
     ).options(
-        selectinload(Order.items).selectinload(OrderItem.item)
+        selectinload(Order.items).selectinload(OrderItem.item),
     ).first()
 
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Order not found"
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     if order.status != OrderStatus.CLOSED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only return items from closed orders"
-        )
-
-    returnable_items = [oi for oi in order.items if oi.item and oi.item.item_type == "returnable" and oi.quantity_dispatched > 0]
-    if not returnable_items:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No returnable items with dispatched quantity found in this order"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only return items from closed orders")
+    if not body.items:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No return items provided")
 
     from app.services.inventory_service import _lock_items
-    item_ids = list(set(oi.item_id for oi in returnable_items))
+
+    oi_map = {oi.id: oi for oi in order.items}
+    item_ids = list(set(r.item_id for r in body.items))
     locked = _lock_items(db, item_ids)
 
-    for oi in returnable_items:
+    total_returned = 0
+    for ret in body.items:
+        oi = oi_map.get(ret.order_item_id)
+        if not oi:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Order item #{ret.order_item_id} not found")
+        if not oi.item or oi.item.item_type != "returnable":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Item #{oi.item_id} is not returnable")
+        if ret.quantity_returned <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Return quantity must be positive")
+
+        remaining = oi.quantity_dispatched - oi.quantity_returned - oi.quantity_damaged
+        if ret.quantity_returned + ret.quantity_damaged > remaining:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Item #{oi.item_id}: only {remaining} units left to return (dispatched: {oi.quantity_dispatched}, already returned: {oi.quantity_returned}, already damaged: {oi.quantity_damaged})"
+            )
+
         item = locked.get(oi.item_id)
         if not item:
-            continue
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Inventory item #{oi.item_id} not found")
 
-        return_qty = oi.quantity_dispatched
-        previous_qty = item.current_quantity
-        new_qty = previous_qty + return_qty
+        good_qty = Decimal(str(ret.quantity_returned - ret.quantity_damaged))
+        if good_qty > 0:
+            previous_qty = item.current_quantity
+            new_qty = previous_qty + good_qty
+            transaction = InventoryTransaction(
+                item_id=item.id,
+                transaction_type="return",
+                previous_quantity=previous_qty,
+                change_quantity=good_qty,
+                new_quantity=new_qty,
+                reference_type="return",
+                reference_id=order.id,
+                reason=f"Return from order {order.order_number} - {ret.reason or ''}".strip(),
+                created_by=current_user.id,
+            )
+            db.add(transaction)
+            item.current_quantity = new_qty
 
-        transaction = InventoryTransaction(
-            item_id=item.id,
-            transaction_type="return",
-            previous_quantity=previous_qty,
-            change_quantity=return_qty,
-            new_quantity=new_qty,
-            reference_type="return",
-            reference_id=order.id,
-            reason=f"Return from order {order.order_number}",
-            created_by=current_user.id,
-        )
-        db.add(transaction)
-        item.current_quantity = new_qty
+        oi.quantity_returned += Decimal(str(ret.quantity_returned))
+        oi.quantity_damaged += Decimal(str(ret.quantity_damaged))
+        total_returned += ret.quantity_returned
 
-    add_timeline_entry(db, order, "returned", current_user, f"Returned {len(returnable_items)} item(s)")
+    add_timeline_entry(db, order, "returned", current_user, f"Returned {total_returned} unit(s)")
     log_audit(db, user_id=current_user.id, action="order.returned", entity_type="order", entity_id=order.id)
     db.commit()
     db.refresh(order)
@@ -1260,8 +1264,8 @@ def download_order_pdf(
                     media_type="application/pdf",
                     filename=f"{order.order_number}_requisition.pdf"
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Could not load existing PDF for order %s, regenerating: %s", order_id, str(e))
 
     items = [
         {

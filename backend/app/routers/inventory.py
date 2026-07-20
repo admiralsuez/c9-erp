@@ -144,10 +144,23 @@ def list_items(
     if item_type:
         query = query.filter(InventoryItem.item_type == item_type)
     
-    # Filter low stock items
+    # Filter low stock items (uses global threshold when item minimum is 0, excludes parents)
     if low_stock:
+        parent_ids = set(row[0] for row in db.query(InventoryItem.parent_id).filter(
+            InventoryItem.parent_id != None,
+            InventoryItem.deleted_at == None
+        ).distinct().all() if row[0] is not None)
+        if parent_ids:
+            query = query.filter(~InventoryItem.id.in_(parent_ids))
+
+        from app.models import Settings as SettingsModel
+        settings_row = db.query(SettingsModel).first()
+        default_threshold = float(settings_row.default_low_stock_threshold) if settings_row and settings_row.default_low_stock_threshold else 10
         query = query.filter(
-            InventoryItem.current_quantity <= InventoryItem.minimum_quantity
+            or_(
+                and_(InventoryItem.minimum_quantity > 0, InventoryItem.current_quantity <= InventoryItem.minimum_quantity),
+                and_(or_(InventoryItem.minimum_quantity == 0, InventoryItem.minimum_quantity == None), InventoryItem.current_quantity <= default_threshold),
+            )
         )
     
     # Get total count before pagination
@@ -561,6 +574,13 @@ def restock_item(
     current_user: User = Depends(require_permission("inventory.dispatch"))
 ):
     """Restock an item (add to current_quantity via ledger, row-locked)."""
+    item = db.query(InventoryItem).filter(InventoryItem.id == restock_data.item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.parent_id is None:
+        has_children = db.query(InventoryItem).filter(InventoryItem.parent_id == item.id, InventoryItem.deleted_at == None).first() is not None
+        if has_children:
+            raise HTTPException(status_code=400, detail="Cannot restock a parent item. Stock is managed on individual variants.")
     transaction = svc_restock(
         db,
         item_id=restock_data.item_id,
@@ -578,6 +598,13 @@ def adjust_item(
     current_user: User = Depends(require_permission("inventory.edit"))
 ):
     """Adjust item quantity to a specific value via ledger (row-locked)."""
+    item = db.query(InventoryItem).filter(InventoryItem.id == adjust_data.item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.parent_id is None:
+        has_children = db.query(InventoryItem).filter(InventoryItem.parent_id == item.id, InventoryItem.deleted_at == None).first() is not None
+        if has_children:
+            raise HTTPException(status_code=400, detail="Cannot adjust a parent item. Stock is managed on individual variants.")
     transaction = svc_adjust(
         db,
         item_id=adjust_data.item_id,

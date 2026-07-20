@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, Button, Select, DateInput, FilterPill, ListLoadingState, ListEmptyState, StatusBadge, TextInput } from '../../components/ui';
 import { cardErrorPadded } from '../../styles/classNames';
 import { Search, Plus, ChevronLeft, ChevronRight, AlertCircle, Filter } from 'lucide-react';
@@ -43,8 +43,14 @@ const formatStatus = (status: string) =>
 
 export const OrdersListPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('open');
+  const [selectedStatus, setSelectedStatus] = useState(() => {
+    const statusParam = searchParams.get('status');
+    const validStatuses = ['draft', 'pending_requisition', 'signed_requisition_uploaded', 'approved', 'dispatched', 'delivered', 'closed', 'cancelled', 'returned'];
+    if (statusParam && validStatuses.includes(statusParam)) return statusParam;
+    return 'open';
+  });
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);

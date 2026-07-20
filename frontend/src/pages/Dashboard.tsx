@@ -79,7 +79,7 @@ export const DashboardPage: React.FC = () => {
       value: lowStockCount.toString(),
       trend: (lowStockCount > 0 ? 'down' : 'up') as 'up' | 'down',
       trendValue: lowStockCount > 0 ? 'Needs attention' : 'All stocked up',
-      onClick: () => navigate('/inventory?low_stock=true'),
+      onClick: () => navigate('/inventory?status=low_stock'),
     },
     {
       label: 'Pending Approvals',
@@ -190,7 +190,7 @@ export const DashboardPage: React.FC = () => {
                 <div className="bg-primary-600 h-2 rounded-full" style={{ width: '100%' }} />
               </div>
             </div>
-            <div className="cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigate('/inventory?low_stock=true')}>
+            <div className="cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigate('/inventory?status=low_stock')}>
               <div className="flex justify-between items-center mb-1">
                 <span className="text-sm text-neutral-600">Low Stock Items</span>
                 <span className={`text-sm font-semibold ${lowStockCount > 0 ? 'text-warning' : 'text-success'}`}>

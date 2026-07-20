@@ -592,30 +592,36 @@ export const InventoryDetailPage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-neutral-900">Stock Transactions</h3>
               <div className="flex gap-2">
-                <Button
-                  onClick={() => {
-                    setStockAction(stockAction === 'restock' ? null : 'restock');
-                    setStockQty('');
-                    setStockReason('');
-                    setFormError('');
-                  }}
-                  className="flex items-center gap-2 bg-primary-600 text-white hover:bg-primary-700 text-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  Restock
-                </Button>
-                <Button
-                  onClick={() => {
-                    setStockAction(stockAction === 'adjust' ? null : 'adjust');
-                    setStockQty('');
-                    setStockReason('');
-                    setFormError('');
-                  }}
-                  className="flex items-center gap-2 border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-sm"
-                >
-                  <SlidersHorizontal className="w-4 h-4" />
-                  Adjust
-                </Button>
+                {isParent ? (
+                  <p className="text-sm text-neutral-500 italic">Stock is managed on individual variants</p>
+                ) : (
+                  <>
+                    <Button
+                      onClick={() => {
+                        setStockAction(stockAction === 'restock' ? null : 'restock');
+                        setStockQty('');
+                        setStockReason('');
+                        setFormError('');
+                      }}
+                      className="flex items-center gap-2 bg-primary-600 text-white hover:bg-primary-700 text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Restock
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setStockAction(stockAction === 'adjust' ? null : 'adjust');
+                        setStockQty('');
+                        setStockReason('');
+                        setFormError('');
+                      }}
+                      className="flex items-center gap-2 border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-sm"
+                    >
+                      <SlidersHorizontal className="w-4 h-4" />
+                      Adjust
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
 

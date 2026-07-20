@@ -113,7 +113,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
         method: 'POST',
         body: formData,
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
         },
       });
 

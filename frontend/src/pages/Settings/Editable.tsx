@@ -1,14 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Button, ListLoadingState } from '../../components/ui';
 import { formLabel } from '../../styles/classNames';
-import { X, Plus, Edit2, Trash2, Loader, AlertCircle, Download, Upload } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, Loader, AlertCircle, Download, Upload, History, Clock } from 'lucide-react';
 import {
   useSettings,
   useUpdateSettings,
+  useUploadLogo,
   useUsers,
   useCreateUser,
   useUpdateUser,
   useDeleteUser,
+  useApprovalRules,
+  useCreateApprovalRule,
+  useUpdateApprovalRule,
+  useDeleteApprovalRule,
   useRoles,
   usePermissions,
   useCreateRole,
@@ -31,8 +36,9 @@ import {
   useListBackups,
 } from '../../hooks/useSettings';
 import { useAuth } from '../../hooks/useAuth';
+import type { ApprovalRuleResponse, ApprovalRuleCreateRequest } from '../../api/settings';
 import { SignatureCapture } from '../../components/SignatureCapture';
-import { formatDateTime } from '../../utils/format';
+import { formatDate, formatDateTime } from '../../utils/format';
 
 const ErrorMessage: React.FC<{ message: string }> = ({ message }) => (
   <div className="p-3 bg-error/10 border border-error/30 rounded-lg text-sm text-error flex items-center gap-2">
@@ -45,7 +51,15 @@ const ErrorMessage: React.FC<{ message: string }> = ({ message }) => (
 export const CompanyProfileSection: React.FC = () => {
   const { data: settings, isLoading, error } = useSettings();
   const updateSettings = useUpdateSettings();
+  const uploadLogo = useUploadLogo();
   const [isEditing, setIsEditing] = useState(false);
+  const handleLogoUpload = (file: File) => {
+    uploadLogo.mutate(file, {
+      onSuccess: (data) => {
+        setFormData((prev) => ({ ...prev, company_logo_url: data.company_logo_url || '' }));
+      },
+    });
+  };
   const [formData, setFormData] = useState({
     company_name: '',
     company_gst: '',
@@ -55,6 +69,8 @@ export const CompanyProfileSection: React.FC = () => {
     order_number_format: '',
     requisition_number_format: '',
     default_low_stock_threshold: 0,
+    ho_prefix: 'HO',
+    llf_prefix: 'LLF',
   });
 
   useEffect(() => {
@@ -68,6 +84,8 @@ export const CompanyProfileSection: React.FC = () => {
         order_number_format: settings.order_number_format || '',
         requisition_number_format: settings.requisition_number_format || '',
         default_low_stock_threshold: settings.default_low_stock_threshold || 0,
+        ho_prefix: settings.ho_prefix || 'HO',
+        llf_prefix: settings.llf_prefix || 'LLF',
       });
     }
   }, [settings]);
@@ -95,7 +113,6 @@ export const CompanyProfileSection: React.FC = () => {
             ['company_name', 'Company Name'],
             ['company_gst', 'GST Number'],
             ['company_contact', 'Contact'],
-            ['company_logo_url', 'Company Logo URL'],
             ['order_number_format', 'Order Number Format'],
             ['requisition_number_format', 'Requisition Number Format'],
           ].map(([key, label]) => (
@@ -111,6 +128,34 @@ export const CompanyProfileSection: React.FC = () => {
             </div>
           ))}
           <div>
+            <label className={formLabel}>Company Logo</label>
+            <div className="flex items-center gap-4">
+              {formData.company_logo_url && (
+                <img
+                  src={formData.company_logo_url}
+                  alt="Logo preview"
+                  className="w-20 h-20 object-contain border rounded"
+                />
+              )}
+              <label className="cursor-pointer px-4 py-2 border border-neutral-300 rounded-lg hover:bg-neutral-50 text-sm text-neutral-700 flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                {formData.company_logo_url ? 'Change Logo' : 'Upload Logo'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={updateSettings.isPending}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleLogoUpload(file);
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+          <div>
             <label className={formLabel}>Default Low Stock Threshold</label>
             <input
               type="number"
@@ -119,6 +164,28 @@ export const CompanyProfileSection: React.FC = () => {
               className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={updateSettings.isPending}
             />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={formLabel}>Office Location Prefix (HO)</label>
+              <input
+                type="text"
+                value={formData.ho_prefix}
+                onChange={(e) => setFormData({ ...formData, ho_prefix: e.target.value })}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                disabled={updateSettings.isPending}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Warehouse Location Prefix (LLF)</label>
+              <input
+                type="text"
+                value={formData.llf_prefix}
+                onChange={(e) => setFormData({ ...formData, llf_prefix: e.target.value })}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                disabled={updateSettings.isPending}
+              />
+            </div>
           </div>
           <div>
             <label className={formLabel}>Address</label>
@@ -153,10 +220,18 @@ export const CompanyProfileSection: React.FC = () => {
         </Button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {settings?.company_logo_url && (
+          <div className="md:col-span-2">
+            <p className="text-sm text-neutral-600 font-medium mb-1">Company Logo</p>
+            <img src={settings.company_logo_url} alt="Company Logo" className="h-16 object-contain" />
+          </div>
+        )}
         <div><p className="text-sm text-neutral-600 font-medium mb-1">Company Name</p><p className="text-neutral-900">{settings?.company_name || '—'}</p></div>
         <div><p className="text-sm text-neutral-600 font-medium mb-1">GST</p><p className="text-neutral-900">{settings?.company_gst || '—'}</p></div>
         <div><p className="text-sm text-neutral-600 font-medium mb-1">Contact</p><p className="text-neutral-900">{settings?.company_contact || '—'}</p></div>
         <div><p className="text-sm text-neutral-600 font-medium mb-1">Low Stock Threshold</p><p className="text-neutral-900">{settings?.default_low_stock_threshold}</p></div>
+        <div><p className="text-sm text-neutral-600 font-medium mb-1">Office Prefix</p><p className="text-neutral-900">{settings?.ho_prefix || 'HO'}</p></div>
+        <div><p className="text-sm text-neutral-600 font-medium mb-1">Warehouse Prefix</p><p className="text-neutral-900">{settings?.llf_prefix || 'LLF'}</p></div>
         <div className="md:col-span-2"><p className="text-sm text-neutral-600 font-medium mb-1">Address</p><p className="text-neutral-900">{settings?.company_address || '—'}</p></div>
       </div>
     </Card>
@@ -175,7 +250,7 @@ export const UsersSection: React.FC = () => {
   const updateRole = useUpdateRole();
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', department: '', role_id: 0 });
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', department: '', location: 'HO', role_id: 0 });
   const [isAddingRole, setIsAddingRole] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
   const [roleForm, setRoleForm] = useState({ name: '', description: '', permission_ids: [] as number[] });
@@ -187,7 +262,7 @@ export const UsersSection: React.FC = () => {
   }, [roles, form.role_id]);
 
   const reset = () => {
-    setForm({ full_name: '', email: '', password: '', department: '', role_id: roles[0]?.id || 0 });
+    setForm({ full_name: '', email: '', password: '', department: '', location: 'HO', role_id: roles[0]?.id || 0 });
     setIsAdding(false);
     setEditingId(null);
   };
@@ -195,7 +270,7 @@ export const UsersSection: React.FC = () => {
   const submit = () => {
     if (!form.full_name || !form.email || !form.role_id) return;
     if (editingId) {
-      updateUser.mutate({ userId: editingId, data: { full_name: form.full_name, email: form.email, department: form.department, role_id: form.role_id } }, { onSuccess: reset });
+      updateUser.mutate({ userId: editingId, data: { full_name: form.full_name, email: form.email, department: form.department, location: form.location, role_id: form.role_id } }, { onSuccess: reset });
     } else {
       if (!form.password) return;
       createUser.mutate(form, { onSuccess: reset });
@@ -287,6 +362,10 @@ export const UsersSection: React.FC = () => {
           <input type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
           {!editingId && <input type="password" placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />}
           <input type="text" placeholder="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
+          <select value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm">
+            <option value="HO">Office (HO)</option>
+            <option value="LLF">Warehouse (LLF)</option>
+          </select>
           <select value={form.role_id} onChange={(e) => setForm({ ...form, role_id: Number(e.target.value) })} className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm">
             {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
           </select>
@@ -316,11 +395,11 @@ export const UsersSection: React.FC = () => {
           <div key={user.id} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
             <div className="flex-1 min-w-0">
               <p className="font-medium text-neutral-900 truncate">{user.full_name}</p>
-              <p className="text-xs text-neutral-600 truncate">{user.email}{user.department ? ` • ${user.department}` : ''}</p>
+              <p className="text-xs text-neutral-600 truncate">{user.email}{user.department ? ` • ${user.department}` : ''}{user.location ? ` • [${user.location}]` : ''}</p>
             </div>
             <div className="flex items-center gap-3 ml-3 flex-shrink-0">
               <span className="text-xs font-semibold px-2 py-1 bg-primary-100 text-primary-700 rounded whitespace-nowrap">{user.role?.name || 'Role'}</span>
-              <button onClick={() => { setEditingId(user.id); setIsAdding(false); setForm({ full_name: user.full_name, email: user.email, password: '', department: user.department || '', role_id: user.role?.id || roles[0]?.id || 0 }); }} className="p-1 text-primary-600 hover:bg-primary-50 rounded"><Edit2 className="w-4 h-4" /></button>
+              <button onClick={() => { setEditingId(user.id); setIsAdding(false); setForm({ full_name: user.full_name, email: user.email, password: '', department: user.department || '', location: user.location || 'HO', role_id: user.role?.id || roles[0]?.id || 0 }); }} className="p-1 text-primary-600 hover:bg-primary-50 rounded"><Edit2 className="w-4 h-4" /></button>
               <button onClick={() => { if (window.confirm('Are you sure you want to delete this user?')) deleteUser.mutate(user.id); }} className="p-1 text-error hover:bg-error/10 rounded"><Trash2 className="w-4 h-4" /></button>
             </div>
           </div>
@@ -476,12 +555,156 @@ export const CategoriesSection: React.FC = () => {
 };
 
 // ============ APPROVAL MATRIX SECTION ============
-export const ApprovalMatrixSection: React.FC = () => (
-  <Card padding="lg">
-    <h2 className="text-lg font-semibold text-neutral-900 mb-4">Approval Matrix</h2>
-    <p className="text-sm text-neutral-600">Approval rules are managed by backend approval-rule configuration and are not hardcoded here.</p>
-  </Card>
-);
+export const ApprovalMatrixSection: React.FC = () => {
+  const { data: rules = [], isLoading, error } = useApprovalRules();
+  const createRule = useCreateApprovalRule();
+  const updateRule = useUpdateApprovalRule();
+  const deleteRule = useDeleteApprovalRule();
+  const { data: roles = [] } = useRoles();
+  const { data: users } = useUsers(1, 100);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({ name: '', rule_type: 'quantity', condition_json: '{}', approver_role_id: '', approver_user_id: '', priority: 0 });
+
+  const resetForm = () => setForm({ name: '', rule_type: 'quantity', condition_json: '{}', approver_role_id: '', approver_user_id: '', priority: 0 });
+
+  const handleSave = () => {
+    const data: ApprovalRuleCreateRequest = {
+      name: form.name,
+      rule_type: form.rule_type,
+      condition_json: JSON.parse(form.condition_json || '{}'),
+      priority: form.priority,
+    };
+    if (form.approver_role_id) data.approver_role_id = Number(form.approver_role_id);
+    if (form.approver_user_id) data.approver_user_id = Number(form.approver_user_id);
+
+    const mutation = editingId
+      ? updateRule.mutateAsync({ ruleId: editingId, data })
+      : createRule.mutateAsync(data);
+
+    mutation.then(() => {
+      setShowForm(false);
+      setEditingId(null);
+      resetForm();
+    });
+  };
+
+  const startEdit = (rule: ApprovalRuleResponse) => {
+    setForm({
+      name: rule.name,
+      rule_type: rule.rule_type,
+      condition_json: JSON.stringify(rule.condition_json, null, 2),
+      approver_role_id: rule.approver_role_id?.toString() || '',
+      approver_user_id: rule.approver_user_id?.toString() || '',
+      priority: rule.priority,
+    });
+    setEditingId(rule.id);
+    setShowForm(true);
+  };
+
+  if (isLoading) return <ListLoadingState message="Loading approval rules..." />;
+  if (error) return <Card padding="lg"><ErrorMessage message="Could not load approval rules." /></Card>;
+
+  return (
+    <Card padding="lg">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-neutral-900">Approval Matrix</h2>
+        <Button onClick={() => { setShowForm(true); setEditingId(null); resetForm(); }} className="flex items-center gap-2 text-sm bg-primary-600 text-white hover:bg-primary-700">
+          <Plus className="w-4 h-4" /> Add Rule
+        </Button>
+      </div>
+
+      {showForm && (
+        <div className="mb-6 p-4 border border-neutral-200 rounded-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-neutral-800">{editingId ? 'Edit Rule' : 'New Rule'}</h3>
+            <button onClick={() => { setShowForm(false); setEditingId(null); resetForm(); }} className="p-1 hover:bg-neutral-100 rounded"><X className="w-4 h-4" /></button>
+          </div>
+          <div>
+            <label className={formLabel}>Name</label>
+            <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={formLabel}>Type</label>
+              <select value={form.rule_type} onChange={(e) => setForm({ ...form, rule_type: e.target.value })}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                <option value="quantity">Quantity</option>
+                <option value="value">Value</option>
+                <option value="department">Department</option>
+                <option value="user">User</option>
+              </select>
+            </div>
+            <div>
+              <label className={formLabel}>Priority</label>
+              <input type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
+            </div>
+          </div>
+          <div>
+            <label className={formLabel}>Condition (JSON)</label>
+            <textarea value={form.condition_json} onChange={(e) => setForm({ ...form, condition_json: e.target.value })}
+              rows={2}
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+              placeholder='{"min_quantity": 500}' />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={formLabel}>Approver Role</label>
+              <select value={form.approver_role_id} onChange={(e) => setForm({ ...form, approver_role_id: e.target.value })}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                <option value="">Any approver role</option>
+                {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={formLabel}>Approver User</label>
+              <select value={form.approver_user_id} onChange={(e) => setForm({ ...form, approver_user_id: e.target.value })}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                <option value="">Any user</option>
+                {(users?.items || []).map((u: any) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+              </select>
+            </div>
+          </div>
+          {createRule.error && <ErrorMessage message="Could not save rule." />}
+          <div className="flex gap-2 justify-end">
+            <Button onClick={() => { setShowForm(false); setEditingId(null); resetForm(); }} className="px-4 py-2 border border-neutral-300 text-neutral-700 hover:bg-neutral-50">Cancel</Button>
+            <Button onClick={handleSave} disabled={createRule.isPending || updateRule.isPending} className="px-4 py-2 bg-primary-600 text-white hover:bg-primary-700">{editingId ? 'Update' : 'Create'}</Button>
+          </div>
+        </div>
+      )}
+
+      {rules.length === 0 ? (
+        <p className="text-sm text-neutral-500">No approval rules configured yet. Add one to set up order approval conditions.</p>
+      ) : (
+        <div className="space-y-2">
+          {rules.map((rule) => (
+            <div key={rule.id} className="flex items-center justify-between p-3 border border-neutral-200 rounded-lg hover:bg-neutral-50">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-neutral-900 text-sm">{rule.name}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${rule.is_active ? 'bg-green-100 text-green-700' : 'bg-neutral-100 text-neutral-500'}`}>
+                    {rule.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                  <span className="text-xs text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded">{rule.rule_type}</span>
+                  <span className="text-xs text-neutral-400">priority {rule.priority}</span>
+                </div>
+                <div className="text-xs text-neutral-500 mt-0.5 truncate">
+                  Condition: {JSON.stringify(rule.condition_json)} | Approver: {rule.approver_role_id ? `Role #${rule.approver_role_id}` : rule.approver_user_id ? `User #${rule.approver_user_id}` : 'Any'}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 ml-3">
+                <button onClick={() => startEdit(rule)} className="p-1.5 hover:bg-neutral-100 rounded text-neutral-500 hover:text-primary-600"><Edit2 className="w-4 h-4" /></button>
+                <button onClick={() => { if (window.confirm('Delete this rule?')) deleteRule.mutate(rule.id); }} className="p-1.5 hover:bg-neutral-100 rounded text-neutral-500 hover:text-error"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+};
 
 // ============ AUDIT LOG SECTION ============
 export const AuditLogSection: React.FC = () => {
@@ -533,6 +756,90 @@ export const AuditLogSection: React.FC = () => {
         ))}
         {!isLoading && !data?.items?.length && <p className="text-sm text-neutral-500">No audit logs found.</p>}
       </div>
+    </Card>
+  );
+};
+
+// ============ CHANGELOG SECTION ============
+export const ChangelogSection: React.FC = () => {
+  const { data, isLoading, error } = useAuditLogs(1, 200);
+
+  const grouped = React.useMemo(() => {
+    const map: Record<string, any[]> = {};
+    if (!data?.items) return map;
+    for (const log of data.items) {
+      const date = log.created_at ? formatDate(log.created_at) : 'Unknown';
+      if (!map[date]) map[date] = [];
+      map[date].push(log);
+    }
+    return Object.fromEntries(
+      Object.entries(map).sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    );
+  }, [data]);
+
+  const actionIcon = (action: string) => {
+    if (action.startsWith('order.')) return '📦';
+    if (action.startsWith('inventory.')) return '📋';
+    if (action === 'login') return '🔐';
+    return '📝';
+  };
+
+  return (
+    <Card padding="lg">
+      <div className="flex items-center gap-3 mb-6">
+        <History className="w-6 h-6 text-info" />
+        <div>
+          <h2 className="text-lg font-semibold text-neutral-900">Changelog</h2>
+          <p className="text-sm text-neutral-500">All system changes recorded in reverse chronological order</p>
+        </div>
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center gap-2 text-neutral-500 py-8">
+          <Loader className="w-5 h-5 animate-spin" />
+          <span>Loading changelog...</span>
+        </div>
+      )}
+
+      {error && <ErrorMessage message="Could not load changelog. Admin access may be required." />}
+
+      {!isLoading && !error && Object.keys(grouped).length === 0 && (
+        <div className="text-center py-12 text-neutral-500">
+          <History className="w-12 h-12 mx-auto mb-3 opacity-40" />
+          <p>No changes recorded yet.</p>
+        </div>
+      )}
+
+      {!isLoading && !error && Object.entries(grouped).map(([date, logs]) => (
+        <div key={date} className="mb-6 last:mb-0">
+          <h3 className="text-sm font-semibold text-neutral-700 mb-3 flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            {date}
+            <span className="text-xs text-neutral-400 font-normal">({logs.length} change{logs.length !== 1 ? 's' : ''})</span>
+          </h3>
+          <div className="space-y-2">
+            {logs.map((log) => (
+              <div key={log.id} className="flex items-start gap-3 p-3 bg-neutral-50 rounded-lg border border-neutral-100">
+                <span className="text-lg mt-0.5">{actionIcon(log.action)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium text-neutral-900 text-sm truncate">
+                      {log.action.replace(/\./g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                    </p>
+                    <span className="text-xs text-neutral-400 whitespace-nowrap">
+                      {log.created_at ? formatDateTime(log.created_at).split(', ')[1] || formatDateTime(log.created_at) : '—'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    User #{log.user_id}
+                    {log.entity_type ? ` • ${log.entity_type}${log.entity_id ? ` #${log.entity_id}` : ''}` : ''}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </Card>
   );
 };

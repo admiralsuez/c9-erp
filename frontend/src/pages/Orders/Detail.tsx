@@ -119,6 +119,88 @@ export const OrderDetailPage: React.FC = () => {
   const [receiverNamePresent, setReceiverNamePresent] = useState(false);
   const deliverChallanRef = useRef<HTMLInputElement>(null);
 
+  // Return modal state
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [returnItems, setReturnItems] = useState<Array<{
+    order_item_id: number;
+    item_id: number;
+    quantity_returned: number;
+    quantity_damaged: number;
+    reason: string;
+    photos: File[];
+    photoPreviews: string[];
+  }>>([]);
+
+  const openReturnModal = () => {
+    if (!order) return;
+    const items = order.items
+      .filter((oi: any) => {
+        const info = itemMap[oi.item_id];
+        return info?.item_type === 'returnable' && Number(oi.quantity_dispatched) > 0;
+      })
+      .map((oi: any) => ({
+        order_item_id: oi.id,
+        item_id: oi.item_id,
+        quantity_returned: Math.max(0, Number(oi.quantity_dispatched) - Number(oi.quantity_returned || 0) - Number(oi.quantity_damaged || 0)),
+        quantity_damaged: 0,
+        reason: '',
+        photos: [] as File[],
+        photoPreviews: [] as string[],
+      }));
+    setReturnItems(items);
+    setReturnModalOpen(true);
+  };
+
+  const handleReturnPhoto = (idx: number, files: FileList | null) => {
+    if (!files) return;
+    setReturnItems(prev => {
+      const next = [...prev];
+      const newPhotos = [...next[idx].photos];
+      const newPreviews = [...next[idx].photoPreviews];
+      for (const f of files) {
+        newPhotos.push(f);
+        newPreviews.push(URL.createObjectURL(f));
+      }
+      next[idx] = { ...next[idx], photos: newPhotos, photoPreviews: newPreviews };
+      return next;
+    });
+  };
+
+  const removeReturnPhoto = (idx: number, photoIdx: number) => {
+    setReturnItems(prev => {
+      const next = [...prev];
+      const newPhotos = next[idx].photos.filter((_, i) => i !== photoIdx);
+      const newPreviews = next[idx].photoPreviews.filter((_, i) => i !== photoIdx);
+      URL.revokeObjectURL(next[idx].photoPreviews[photoIdx]);
+      next[idx] = { ...next[idx], photos: newPhotos, photoPreviews: newPreviews };
+      return next;
+    });
+  };
+
+  const submitReturn = () => {
+    if (!order || !orderId) return;
+    const payload = returnItems
+      .filter(r => r.quantity_returned > 0)
+      .map(r => ({
+        order_item_id: r.order_item_id,
+        item_id: r.item_id,
+        quantity_returned: r.quantity_returned,
+        quantity_damaged: r.quantity_damaged,
+        reason: r.reason || undefined,
+      }));
+    if (payload.length === 0) {
+      toast.error('Enter at least one item to return');
+      return;
+    }
+    returnOrder.mutate(
+      { orderId: order.id, items: payload },
+      {
+        onSuccess: () => { setReturnModalOpen(false); toast.success('Return processed'); },
+        onError: (err: any) => onError(err, 'Failed to process return'),
+      }
+    );
+  };
+
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
   const [editItems, setEditItems] = useState<Array<{ item_id: number; quantity_ordered: number }>>([]);
@@ -189,6 +271,7 @@ export const OrderDetailPage: React.FC = () => {
     deliverOrder.isPending ||
     closeOrder.isPending ||
     cancelOrder.isPending ||
+    returnOrder.isPending ||
     uploadDocument.isPending;
 
   const itemMap: Record<number, { name: string; sku: string; item_type: string }> = {};
@@ -198,7 +281,9 @@ export const OrderDetailPage: React.FC = () => {
 
   const hasReturnableItems = order ? order.items.some((oi: any) => {
     const info = itemMap[oi.item_id];
-    return info?.item_type === 'returnable' && Number(oi.quantity_dispatched) > 0;
+    if (info?.item_type !== 'returnable') return false;
+    const remaining = Number(oi.quantity_dispatched) - Number(oi.quantity_returned ?? 0) - Number(oi.quantity_damaged ?? 0);
+    return remaining > 0;
   }) : false;
 
   const userLabel = (userId?: number | null) =>
@@ -539,21 +624,11 @@ export const OrderDetailPage: React.FC = () => {
 
           {order.status === 'closed' && hasReturnableItems && (
             <Button
-              onClick={() =>
-                runAction(() =>
-                  returnOrder.mutate(order.id, {
-                    onError: (err: any) => onError(err, 'Failed to return items'),
-                  })
-                )
-              }
+              onClick={openReturnModal}
               disabled={isActing}
               className="flex items-center gap-2 bg-warning text-white hover:bg-warning/90 disabled:opacity-50"
             >
-              {returnOrder.isPending ? (
-                <Loader className="w-4 h-4 animate-spin" />
-              ) : (
-                <Undo2 className="w-4 h-4" />
-              )}
+              <Undo2 className="w-4 h-4" />
               Return Order
             </Button>
           )}
@@ -916,6 +991,150 @@ export const OrderDetailPage: React.FC = () => {
         </Card>
       )}
 
+      {/* Return Modal */}
+      {returnModalOpen && (
+        <Card padding="lg" className="border border-warning/30 bg-warning/5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-neutral-900">Return Items</h3>
+              <p className="text-sm text-neutral-500">Specify quantities to return and mark any damaged items</p>
+            </div>
+            <Button
+              onClick={() => setReturnModalOpen(false)}
+              className="p-2 hover:bg-neutral-100 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {returnItems.map((ri, idx) => {
+              const info = itemMap[ri.item_id];
+              const oi = order?.items.find((o: any) => o.id === ri.order_item_id);
+              const remaining = Math.max(0, Number(oi?.quantity_dispatched || 0) - Number(oi?.quantity_returned || 0) - Number(oi?.quantity_damaged || 0));
+              return (
+                <div key={ri.order_item_id} className="p-4 bg-white rounded-lg border border-neutral-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-medium text-neutral-900 text-sm">{info?.name || `Item #${ri.item_id}`}</p>
+                      <p className="text-xs text-neutral-500">{info?.sku || ''} — Max returnable: {remaining}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                    <div>
+                      <label className="text-xs text-neutral-600 font-medium mb-1 block">Qty to Return</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={remaining}
+                        value={ri.quantity_returned}
+                        onChange={(e) => {
+                          const val = Math.min(Number(e.target.value), remaining);
+                          setReturnItems(prev => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], quantity_returned: Math.max(0, val) };
+                            return next;
+                          });
+                        }}
+                        className="w-full px-3 py-1.5 border border-neutral-300 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-neutral-600 font-medium mb-1 block">of which Damaged</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={ri.quantity_returned}
+                        value={ri.quantity_damaged}
+                        onChange={(e) => {
+                          const val = Math.min(Number(e.target.value), ri.quantity_returned);
+                          setReturnItems(prev => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], quantity_damaged: Math.max(0, val) };
+                            return next;
+                          });
+                        }}
+                        className="w-full px-3 py-1.5 border border-neutral-300 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-neutral-600 font-medium mb-1 block">Good to Restock</label>
+                      <p className="px-3 py-1.5 text-sm font-semibold text-success">
+                        +{Math.max(0, ri.quantity_returned - ri.quantity_damaged)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mb-3">
+                    <label className="text-xs text-neutral-600 font-medium mb-1 block">Reason (optional)</label>
+                    <input
+                      type="text"
+                      value={ri.reason}
+                      onChange={(e) => {
+                        setReturnItems(prev => {
+                          const next = [...prev];
+                          next[idx] = { ...next[idx], reason: e.target.value };
+                          return next;
+                        });
+                      }}
+                      placeholder="e.g. damaged packaging, wrong size..."
+                      className="w-full px-3 py-1.5 border border-neutral-300 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-neutral-600 font-medium mb-1 block">Damage Photos (optional)</label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {ri.photoPreviews.map((preview, pi) => (
+                        <div key={pi} className="relative w-16 h-16">
+                          <img src={preview} alt="damage" className="w-16 h-16 object-cover rounded border" />
+                          <button
+                            onClick={() => removeReturnPhoto(idx, pi)}
+                            className="absolute -top-1 -right-1 w-5 h-5 bg-error text-white rounded-full text-xs flex items-center justify-center"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <label className="inline-flex items-center gap-2 px-3 py-1.5 border border-neutral-300 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 cursor-pointer">
+                      <Upload className="w-4 h-4" />
+                      Add Photo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => handleReturnPhoto(idx, e.target.files)}
+                      />
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-3 justify-end mt-4 pt-4 border-t border-neutral-200">
+            <Button
+              onClick={() => setReturnModalOpen(false)}
+              className="px-4 py-2 border border-neutral-300 rounded-lg text-neutral-700 hover:bg-neutral-50"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={submitReturn}
+              disabled={returnOrder.isPending || returnItems.every(r => r.quantity_returned === 0)}
+              className="px-4 py-2 bg-warning text-white hover:bg-warning/90 flex items-center gap-2 disabled:opacity-50"
+            >
+              {returnOrder.isPending ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <Undo2 className="w-4 h-4" />
+              )}
+              {returnOrder.isPending ? 'Processing...' : 'Submit Return'}
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Order Info */}
       <Card padding="lg">
         <h2 className="text-lg font-semibold text-neutral-900 mb-4">Order Information</h2>
@@ -1141,7 +1360,7 @@ export const OrderDetailPage: React.FC = () => {
                           min="1"
                           step="1"
                           value={entry.quantity_ordered}
-                          onChange={(e) => updateEditItemQty(itemId, Math.max(1, parseInt(e.target.value) || 1))}
+                          onChange={(e) => updateEditItemQty(itemId, Math.max(1, Number(e.target.value) || 1))}
                           className="w-20 px-2 py-1 border border-neutral-300 rounded text-right text-sm"
                         />
                       ) : (

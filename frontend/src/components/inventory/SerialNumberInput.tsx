@@ -60,7 +60,7 @@ export const SerialNumberInput: React.FC<SerialNumberInputProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
         },
         body: JSON.stringify({
           count,
@@ -123,7 +123,7 @@ export const SerialNumberInput: React.FC<SerialNumberInputProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
         },
         body: JSON.stringify({
           start_serial: startSerial,
@@ -298,7 +298,7 @@ export const SerialNumberInput: React.FC<SerialNumberInputProps> = ({
                 min="1"
                 max="1000"
                 value={count}
-                onChange={(e) => setCount(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setCount(Math.max(1, Number(e.target.value) || 1))}
                 disabled={disabled || loading}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               />

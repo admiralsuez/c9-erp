@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_admin
-from app.models import User, Vendor
-from app.schemas import VendorCreate, VendorUpdate, VendorResponse, VendorSummaryResponse
+from app.models import User, Vendor, VendorType
+from app.schemas import VendorCreate, VendorUpdate, VendorResponse, VendorSummaryResponse, VendorTypeResponse, VendorTypeCreate
 from typing import List
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
@@ -289,3 +289,33 @@ def get_vendor_summary(
         total_orders=0,
         total_quantity_ordered=0
     )
+
+
+# ============ VENDOR TYPES ============
+@router.get("/types", response_model=List[VendorTypeResponse])
+def list_vendor_types(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(VendorType).order_by(VendorType.name).all()
+
+
+@router.post("/types", response_model=VendorTypeResponse, status_code=status.HTTP_201_CREATED)
+def create_vendor_type(body: VendorTypeCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    existing = db.query(VendorType).filter(VendorType.name == body.name).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Vendor type already exists")
+    vt = VendorType(name=body.name)
+    db.add(vt)
+    db.commit()
+    db.refresh(vt)
+    return vt
+
+
+@router.delete("/types/{type_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_vendor_type(type_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    vt = db.query(VendorType).filter(VendorType.id == type_id).first()
+    if not vt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vendor type not found")
+    vendors_using = db.query(Vendor).filter(Vendor.vendor_type_id == type_id).count()
+    if vendors_using > 0:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Cannot delete: {vendors_using} vendor(s) use this type")
+    db.delete(vt)
+    db.commit()

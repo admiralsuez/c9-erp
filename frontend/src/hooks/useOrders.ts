@@ -104,5 +104,19 @@ export const useCloseOrder = () =>
 export const useCancelOrder = () =>
   useOrderLifecycleMutation((orderId: number) => ordersApi.cancel(orderId));
 
-export const useReturnOrder = () =>
-  useOrderLifecycleMutation((orderId: number) => ordersApi.returnOrder(orderId));
+export const useReturnOrder = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, items }: { orderId: number; items: { order_item_id: number; item_id: number; quantity_returned: number; quantity_damaged: number; reason?: string }[] }) =>
+      ordersApi.returnOrder(orderId, { items }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.setQueryData(['order', data.id], data);
+      queryClient.invalidateQueries({ queryKey: ['inventory'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['inventory-item'], exact: false });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Operation failed');
+    },
+  });
+};

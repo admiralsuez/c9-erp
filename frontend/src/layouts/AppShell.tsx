@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useSettings } from '../hooks/useSettings';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUnreadCount } from '../hooks/useNotifications';
 import {
@@ -46,6 +47,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { data: unreadCount } = useUnreadCount();
+  const { data: settings } = useSettings();
 
   // Mobile view detection handled via responsive classes
 
@@ -68,7 +70,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       <aside className="hidden md:flex md:w-64 fixed top-0 left-0 h-screen bg-white border-r border-neutral-200 flex-col z-30" aria-label="Sidebar navigation">
         {/* Logo */}
         <div className="p-4 border-b border-neutral-200">
-          <h1 className="text-xl font-bold text-primary-600">Cloud9 ERP</h1>
+          {settings?.company_logo_url ? (
+            <img src={settings.company_logo_url} alt={settings.company_name || 'Logo'} className="h-8 object-contain" />
+          ) : (
+            <h1 className="text-xl font-bold text-primary-600">{settings?.company_name || 'Cloud9 ERP'}</h1>
+          )}
         </div>
 
         {/* Navigation */}
@@ -126,7 +132,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
-          <h1 className="text-base font-bold text-primary-600">Cloud9 ERP</h1>
+          {settings?.company_logo_url ? (
+            <img src={settings.company_logo_url} alt={settings.company_name || 'Logo'} className="h-6 object-contain" />
+          ) : (
+            <h1 className="text-base font-bold text-primary-600">{settings?.company_name || 'Cloud9 ERP'}</h1>
+          )}
 
           <div className="flex items-center gap-1">
             <button onClick={() => navigate('/notifications')} className="p-1.5 hover:bg-neutral-100 rounded-lg relative" aria-label="Notifications">

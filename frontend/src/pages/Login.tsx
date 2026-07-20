@@ -6,11 +6,13 @@ import type { AxiosError } from 'axios';
 import { Button, Input, Card } from '../components/ui';
 import { loginSchema } from '../utils/validation';
 import { useAuth } from '../hooks/useAuth';
+import { useSettings } from '../hooks/useSettings';
 import { AlertCircle } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { data: settings } = useSettings();
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -53,8 +55,16 @@ export const LoginPage: React.FC = () => {
         <Card padding="lg" className="shadow-lg">
           {/* Logo & Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-primary-600 mb-2">Cloud9 ERP</h1>
-            <p className="text-neutral-600">Sign in to manage your inventory</p>
+            {settings?.company_logo_url ? (
+              <img
+                src={settings.company_logo_url}
+                alt={settings.company_name || 'Company Logo'}
+                className="h-16 mx-auto mb-2 object-contain"
+              />
+            ) : (
+              <h1 className="text-3xl font-bold text-primary-600 mb-2">{settings?.company_name || 'Cloud9 ERP'}</h1>
+            )}
+            {!settings?.company_logo_url && <p className="text-neutral-600">Sign in to manage your inventory</p>}
           </div>
 
           {/* Error Banner */}

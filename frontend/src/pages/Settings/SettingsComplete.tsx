@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ArrowLeft,
   HardDrive,
+  History,
 } from 'lucide-react';
 import {
   CompanyProfileSection,
@@ -22,6 +23,7 @@ import {
   NotificationsSection,
   UserProfileSection,
   BackupSection,
+  ChangelogSection,
 } from './Editable';
 import { useSystemInfo } from '../../hooks/useSettings';
 
@@ -75,6 +77,13 @@ const settingsSections: SettingsSection[] = [
     description: 'View system activity, changes, and user actions',
     icon: <FileText className="w-6 h-6" />,
     color: 'bg-warning/20 text-warning',
+  },
+  {
+    id: 'changelog',
+    title: 'Changelog',
+    description: 'View all system changes grouped by date',
+    icon: <History className="w-6 h-6" />,
+    color: 'bg-info/10 text-info',
   },
   {
     id: 'notifications',
@@ -131,6 +140,7 @@ export const SettingsPageComplete: React.FC = () => {
         {selectedSection === 'categories' && <CategoriesSection />}
         {selectedSection === 'approvals' && <ApprovalMatrixSection />}
         {selectedSection === 'audit' && <AuditLogSection />}
+        {selectedSection === 'changelog' && <ChangelogSection />}
         {selectedSection === 'notifications' && <NotificationsSection />}
         {selectedSection === 'signature' && <UserProfileSection />}
         {selectedSection === 'backup' && <BackupSection />}

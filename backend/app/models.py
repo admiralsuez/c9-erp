@@ -20,6 +20,8 @@ class Settings(Base):
     pdf_header_text = Column(Text)
     pdf_footer_text = Column(Text)
     default_low_stock_threshold = Column(Numeric(12, 2), default=10)
+    ho_prefix = Column(String(10), default="HO")
+    llf_prefix = Column(String(10), default="LLF")
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
 
@@ -60,6 +62,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role_id = Column(Integer, ForeignKey("roles.id"))
     department = Column(String(100))
+    location = Column(String(10), default="HO")
     is_active = Column(Boolean, default=True, nullable=False)
     deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
@@ -101,6 +104,16 @@ class UserSignature(Base):
     user = relationship("User", back_populates="signature")
 
 
+# ============ VENDOR TYPES ============
+class VendorType(Base):
+    __tablename__ = "vendor_types"
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), unique=True, nullable=False)
+    
+    vendors = relationship("Vendor", back_populates="vendor_type_rel")
+
+
 # ============ VENDORS ============
 class Vendor(Base):
     __tablename__ = "vendors"
@@ -109,6 +122,7 @@ class Vendor(Base):
     name = Column(String(200), nullable=False)
     name_normalized = Column(String(200), nullable=False, unique=True)
     vendor_type = Column(String(50))
+    vendor_type_id = Column(Integer, ForeignKey("vendor_types.id"), nullable=True)
     contact_person = Column(String(150))
     phone = Column(String(30))
     email = Column(String(150))
@@ -127,6 +141,8 @@ class Vendor(Base):
     deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    
+    vendor_type_rel = relationship("VendorType", back_populates="vendors")
     
     __table_args__ = (
         Index("idx_vendor_name_normalized", "name_normalized"),
@@ -421,14 +437,33 @@ class OrderItem(Base):
     quantity_ordered = Column(Numeric(12, 2), nullable=False)
     quantity_reserved = Column(Numeric(12, 2), default=0, nullable=False)
     quantity_dispatched = Column(Numeric(12, 2), default=0, nullable=False)
+    quantity_returned = Column(Numeric(12, 2), default=0, nullable=False)
+    quantity_damaged = Column(Numeric(12, 2), default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     
     order = relationship("Order", back_populates="items")
     item = relationship("InventoryItem")
+    return_photos = relationship("ReturnPhoto", back_populates="order_item", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("idx_order_items_order", "order_id"),
     )
+
+
+class ReturnPhoto(Base):
+    __tablename__ = "return_photos"
+    
+    id = Column(Integer, primary_key=True)
+    order_item_id = Column(Integer, ForeignKey("order_items.id", ondelete="CASCADE"), nullable=False)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    item_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=False)
+    storage_path = Column(String(500), nullable=False)
+    file_name = Column(String(255))
+    uploaded_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    
+    order_item = relationship("OrderItem", back_populates="return_photos")
+    uploader = relationship("User")
 
 
 class OrderTimeline(Base):

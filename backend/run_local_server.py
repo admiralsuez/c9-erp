@@ -49,6 +49,53 @@ def setup_database():
             conn.close()
             print("[+] Added missing column: vendors.vendor_token_hash")
         
+        # Migration: add location column to users if missing
+        user_columns = [c["name"] for c in inspector.get_columns("users")]
+        if "location" not in user_columns:
+            conn = engine.connect()
+            conn.execute(text("ALTER TABLE users ADD COLUMN location VARCHAR(10) DEFAULT 'HO'"))
+            conn.commit()
+            conn.close()
+            print("[+] Added missing column: users.location")
+
+        # Migration: add prefix columns to settings if missing
+        if "settings" in inspector.get_table_names():
+            settings_columns = [c["name"] for c in inspector.get_columns("settings")]
+            conn = engine.connect()
+            if "ho_prefix" not in settings_columns:
+                conn.execute(text("ALTER TABLE settings ADD COLUMN ho_prefix VARCHAR(10) DEFAULT 'HO'"))
+                print("[+] Added missing column: settings.ho_prefix")
+            if "llf_prefix" not in settings_columns:
+                conn.execute(text("ALTER TABLE settings ADD COLUMN llf_prefix VARCHAR(10) DEFAULT 'LLF'"))
+                print("[+] Added missing column: settings.llf_prefix")
+            conn.commit()
+            conn.close()
+
+        # Migration: create vendor_types table if missing
+        if "vendor_types" not in inspector.get_table_names():
+            conn = engine.connect()
+            conn.execute(text("""
+                CREATE TABLE vendor_types (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(100) NOT NULL UNIQUE,
+                    description VARCHAR(255),
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+            conn.close()
+            print("[+] Created table: vendor_types")
+
+        # Migration: add vendor_type_id to vendors if missing
+        vendor_columns = [c["name"] for c in inspector.get_columns("vendors")]
+        if "vendor_type_id" not in vendor_columns:
+            conn = engine.connect()
+            conn.execute(text("ALTER TABLE vendors ADD COLUMN vendor_type_id INTEGER REFERENCES vendor_types(id)"))
+            conn.commit()
+            conn.close()
+            print("[+] Added missing column: vendors.vendor_type_id")
+
         # Check if we need to seed data
         from app.core.database import SessionLocal
         from app.models import User
@@ -148,7 +195,8 @@ def start_server():
             "main:app", 
             "--host", "0.0.0.0", 
             "--port", "8000",
-            "--reload"
+            "--reload",
+            "--reload-exclude", "*.log"
         ])
     except KeyboardInterrupt:
         print("\n\n[*] Server stopped by user")

@@ -41,7 +41,7 @@ class TestOrderStateMachine:
         assert response.status_code == 201
         data = response.json()
         assert data["status"] == "draft"
-        assert data["order_number"].startswith("ORD-")
+        assert data["order_number"].startswith("HO-ORD-") or data["order_number"].startswith("ORD-")
 
     def test_draft_to_pending_requisition(self, client, db_session):
         """Test Draft -> Pending Requisition transition."""

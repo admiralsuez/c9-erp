@@ -421,7 +421,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
                         <input
                           type="number"
                           value={child.current_quantity}
-                          onChange={(e) => updateChild(idx, 'current_quantity', parseInt(e.target.value) || 0)}
+                          onChange={(e) => updateChild(idx, 'current_quantity', Number(e.target.value) || 0)}
                           placeholder="0"
                           className="form-input text-sm"
                           disabled={isBatchPending}
@@ -432,7 +432,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
                         <input
                           type="number"
                           value={child.minimum_quantity}
-                          onChange={(e) => updateChild(idx, 'minimum_quantity', parseInt(e.target.value) || 0)}
+                          onChange={(e) => updateChild(idx, 'minimum_quantity', Number(e.target.value) || 0)}
                           placeholder="0"
                           className="form-input text-sm"
                           disabled={isBatchPending}

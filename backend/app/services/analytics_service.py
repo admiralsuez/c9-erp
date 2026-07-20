@@ -135,30 +135,52 @@ class AnalyticsService:
     # ============ INVENTORY METRICS ============
     
     def get_low_stock_items(self, threshold: float = None) -> list:
-        """Get items below minimum quantity."""
-        query = self.db.query(InventoryItem).filter(
+        """Get items below minimum quantity (excludes parent items with children)."""
+        from app.models import Settings
+        if threshold is None:
+            global_setting = self.db.query(Settings).first()
+            threshold = float(global_setting.default_low_stock_threshold) if global_setting and global_setting.default_low_stock_threshold else 10
+
+        parent_ids = set(row[0] for row in self.db.query(InventoryItem.parent_id).filter(
+            InventoryItem.parent_id != None,
+            InventoryItem.deleted_at == None
+        ).distinct().all() if row[0] is not None)
+
+        q = self.db.query(InventoryItem).filter(
             InventoryItem.is_active == True,
             InventoryItem.deleted_at == None,
-            InventoryItem.current_quantity <= InventoryItem.minimum_quantity
         )
-        return query.all()
+        if parent_ids:
+            q = q.filter(~InventoryItem.id.in_(parent_ids))
+        items = q.all()
+
+        return [
+            item for item in items
+            if item.current_quantity <= (item.minimum_quantity if item.minimum_quantity and item.minimum_quantity > 0 else threshold)
+        ]
     
     def get_inventory_health(self) -> dict:
-        """Get inventory health metrics."""
+        """Get inventory health metrics (excludes parent items with children)."""
+        parent_ids = set(row[0] for row in self.db.query(InventoryItem.parent_id).filter(
+            InventoryItem.parent_id != None,
+            InventoryItem.deleted_at == None
+        ).distinct().all() if row[0] is not None)
+
+        base_filter = [
+            InventoryItem.is_active == True,
+            InventoryItem.deleted_at == None,
+        ]
+        if parent_ids:
+            base_filter.append(~InventoryItem.id.in_(parent_ids))
+
         low_stock = self.get_low_stock_items()
         
         total_value = self.db.query(
             func.sum(InventoryItem.current_quantity)
-        ).filter(
-            InventoryItem.is_active == True,
-            InventoryItem.deleted_at == None
-        ).scalar() or 0
+        ).filter(*base_filter).scalar() or 0
         
         return {
-            "total_items": self.db.query(InventoryItem).filter(
-                InventoryItem.is_active == True,
-                InventoryItem.deleted_at == None
-            ).count(),
+            "total_items": self.db.query(InventoryItem).filter(*base_filter).count(),
             "low_stock_count": len(low_stock),
             "low_stock_items": [
                 {"id": item.id, "sku": item.sku, "name": item.name, 

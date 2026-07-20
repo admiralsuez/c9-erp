@@ -14,6 +14,7 @@ import type {
   RoleCreateRequest,
   RoleUpdateRequest,
   SignatureUpdateRequest,
+  ApprovalRuleCreateRequest,
 } from '../api/settings';
 
 // ============ SETTINGS ============
@@ -31,6 +32,20 @@ export const useUpdateSettings = () => {
     mutationFn: (data: SettingsUpdateRequest) => settingsApi.updateSettings(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
+};
+
+export const useUploadLogo = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => settingsApi.uploadLogo(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      toast.success('Logo uploaded successfully');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to upload logo');
     },
   });
 };
@@ -89,6 +104,46 @@ export const useRestoreUser = () => {
     mutationFn: (userId: number) => settingsApi.restoreUser(userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+};
+
+// ============ APPROVAL RULES ============
+export const useApprovalRules = () => {
+  return useQuery({
+    queryKey: ['approval-rules'],
+    queryFn: () => settingsApi.listApprovalRules(),
+    retry: 1,
+  });
+};
+
+export const useCreateApprovalRule = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ApprovalRuleCreateRequest) => settingsApi.createApprovalRule(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['approval-rules'] });
+    },
+  });
+};
+
+export const useUpdateApprovalRule = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ruleId, data }: { ruleId: number; data: ApprovalRuleCreateRequest }) =>
+      settingsApi.updateApprovalRule(ruleId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['approval-rules'] });
+    },
+  });
+};
+
+export const useDeleteApprovalRule = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ruleId: number) => settingsApi.deleteApprovalRule(ruleId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['approval-rules'] });
     },
   });
 };

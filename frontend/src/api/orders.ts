@@ -15,6 +15,16 @@ export interface OrderItemResponse {
   quantity_ordered: number;
   quantity_reserved: number;
   quantity_dispatched: number;
+  quantity_returned: number;
+  quantity_damaged: number;
+}
+
+export interface ReturnItemRequest {
+  order_item_id: number;
+  item_id: number;
+  quantity_returned: number;
+  quantity_damaged: number;
+  reason?: string;
 }
 
 export interface OrderTimelineEntry {
@@ -183,8 +193,8 @@ export const ordersApi = {
     return response.data;
   },
 
-  returnOrder: async (orderId: number): Promise<OrderResponse> => {
-    const response = await apiClient.post<OrderResponse>(`/orders/${orderId}/return`);
+  returnOrder: async (orderId: number, body: { items: ReturnItemRequest[] }): Promise<OrderResponse> => {
+    const response = await apiClient.post<OrderResponse>(`/orders/${orderId}/return`, body);
     return response.data;
   },
 };

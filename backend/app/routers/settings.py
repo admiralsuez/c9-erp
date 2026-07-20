@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.core.database import get_db, engine
@@ -7,8 +7,12 @@ from app.models import User, Settings as SettingsModel, InventoryItem, Order, Au
 from app.schemas import SettingsResponse, SettingsUpdate
 from datetime import datetime, timezone, timedelta
 import os
+import shutil
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
+
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "static", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 @router.get("", response_model=SettingsResponse)
@@ -45,6 +49,32 @@ def update_settings(
     for field, value in update_data.items():
         setattr(settings, field, value)
     
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
+@router.post("/logo", response_model=SettingsResponse)
+def upload_logo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """Upload company logo (admin only)."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "png"
+    filename = f"company_logo.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    with open(filepath, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    settings = db.query(SettingsModel).first()
+    if not settings:
+        raise HTTPException(status_code=404, detail="Settings not found")
+    settings.company_logo_url = f"/static/uploads/{filename}"
     db.commit()
     db.refresh(settings)
     return settings

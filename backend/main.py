@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from app.core.database import engine, Base
 from app.core.config import settings
 from app import models
+from fastapi.staticfiles import StaticFiles
 import asyncio
 import logging
 import threading
@@ -193,6 +194,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def health_check():
     return {"status": "ok", "app": settings.APP_NAME}
 
+# Mount static files
+import os
+_static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+os.makedirs(os.path.join(_static_dir, "uploads"), exist_ok=True)
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
 # Include routers
 from app.routers import auth, users, settings as settings_router, vendors, inventory, warehouse, audit, orders, approval_rules, documents, vendor_portal, analytics, health, notifications, reports, backup
 from app.api.routes import inventory_images, inventory_serials
@@ -236,4 +243,4 @@ logger.info(f"Starting {settings.APP_NAME}")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, reload_excludes=["*.log"])

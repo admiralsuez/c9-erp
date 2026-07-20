@@ -274,7 +274,7 @@ export const OrderCreatePage: React.FC = () => {
                 <>
                 <select
                   value={vendorId}
-                  onChange={(e) => setVendorId(e.target.value ? parseInt(e.target.value) : '')}
+                  onChange={(e) => setVendorId(e.target.value ? Number(e.target.value) : '')}
                   className="form-input w-full border border-neutral-300 rounded-lg px-3 py-2"
                   required
                 >
@@ -419,7 +419,7 @@ export const OrderCreatePage: React.FC = () => {
                   <select
                     value={selectedParentId}
                     onChange={(e) => {
-                      const val = e.target.value ? parseInt(e.target.value) : '';
+                      const val = e.target.value ? Number(e.target.value) : '';
                       setSelectedParentId(val);
                       if (val) loadVariants(val);
                       else { setVariants([]); setSerials([]); setSelectedSerialIds([]); }
@@ -454,7 +454,7 @@ export const OrderCreatePage: React.FC = () => {
                   <select
                     value={selectedVariantId}
                     onChange={(e) => {
-                      const val = e.target.value ? parseInt(e.target.value) : '';
+                      const val = e.target.value ? Number(e.target.value) : '';
                       setSelectedVariantId(val);
                       if (val) loadSerials(val);
                       else { setSerials([]); setSelectedSerialIds([]); }
@@ -504,7 +504,7 @@ export const OrderCreatePage: React.FC = () => {
                 <Button
                   type="button"
                   onClick={addItem}
-                  disabled={!selectedParentId || !selectedItemQty || (serials.length > 0 && selectedSerialIds.length !== parseInt(selectedItemQty || '0'))}
+                  disabled={!selectedParentId || !selectedItemQty || (serials.length > 0 && selectedSerialIds.length !== Number(selectedItemQty || '0'))}
                   className="w-full bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
                 >
                   Add Item

@@ -35,6 +35,11 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      // Don't redirect if already on login page
+      if (window.location.pathname === '/login') {
+        return Promise.reject(error);
+      }
+
       try {
         const refreshToken = localStorage.getItem('refresh_token');
         if (!refreshToken) {

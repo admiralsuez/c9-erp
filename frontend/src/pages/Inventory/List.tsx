@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, Button, Select, ListLoadingState, ListEmptyState, StatusBadge, TextInput } from '../../components/ui';
 import { cardErrorPadded } from '../../styles/classNames';
 import { Search, Plus, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
@@ -10,10 +10,13 @@ const ITEMS_PER_PAGE = 20;
 
 type InventoryStatus = 'parent' | 'in_stock' | 'low_stock' | 'out_of_stock';
 
+const DEFAULT_LOW_STOCK_THRESHOLD = 10;
+
 const getStatus = (item: InventoryItemResponse): InventoryStatus => {
   if (item.children && item.children.length > 0) return 'parent';
   if (Number(item.current_quantity) === 0) return 'out_of_stock';
-  if (Number(item.current_quantity) <= Number(item.minimum_quantity)) return 'low_stock';
+  const minQty = Number(item.minimum_quantity) > 0 ? Number(item.minimum_quantity) : DEFAULT_LOW_STOCK_THRESHOLD;
+  if (Number(item.current_quantity) <= minQty) return 'low_stock';
   return 'in_stock';
 };
 
@@ -23,17 +26,33 @@ const getStatusLabel = (status: string) => {
 
 export const InventoryListPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam === 'low_stock' || statusParam === 'out_of_stock' || statusParam === 'in_stock') return statusParam;
+    if (searchParams.get('low_stock') === 'true') return 'low_stock';
+    return 'all';
+  });
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam === 'low_stock' || statusParam === 'out_of_stock' || statusParam === 'in_stock') {
+      setSelectedStatus(statusParam);
+    } else if (searchParams.get('low_stock') === 'true') {
+      setSelectedStatus('low_stock');
+    }
+  }, [searchParams]);
 
   const { data, isLoading, error } = useInventory(
     currentPage,
     ITEMS_PER_PAGE,
     searchQuery || undefined,
     undefined,
-    selectedType === 'all' ? undefined : selectedType
+    selectedType === 'all' ? undefined : selectedType,
+    selectedStatus === 'low_stock' || undefined
   );
 
   const items = data?.items ?? [];

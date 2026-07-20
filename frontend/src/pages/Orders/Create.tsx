@@ -579,17 +579,22 @@ export const OrderCreatePage: React.FC = () => {
           <div className="space-y-4">
             <div>
               <label className={formLabel}>Delivery Address</label>
-              <label className="flex items-center gap-2 mb-3 cursor-pointer">
+              <label className={`flex items-center gap-2 mb-3 ${selectedVendor?.address ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
                 <input
                   type="checkbox"
                   checked={sameAsVendorAddress}
                   onChange={(e) => {
+                    if (!selectedVendor?.address) return;
                     setSameAsVendorAddress(e.target.checked);
                     if (!e.target.checked) { setDeliveryName(''); setDeliveryPhone(''); setDeliveryAddressText(''); setDeliveryPincode(''); }
                   }}
-                  className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                  disabled={!selectedVendor?.address}
+                  className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
                 />
-                <span className="text-sm text-neutral-700">Same as vendor address</span>
+                <span className={`text-sm ${selectedVendor?.address ? 'text-neutral-700' : 'text-neutral-400'}`}>
+                  Same as vendor address
+                  {!selectedVendor?.address && ' (vendor has no address)'}
+                </span>
               </label>
               {!sameAsVendorAddress && (
                 <div className="space-y-3">

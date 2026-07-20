@@ -7,6 +7,7 @@ from app.models import User, Settings as SettingsModel, InventoryItem, Order, Au
 from app.schemas import SettingsResponse, SettingsUpdate
 from datetime import datetime, timezone, timedelta
 import os
+import re
 import shutil
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
@@ -46,6 +47,17 @@ def update_settings(
     
     # Update only provided fields
     update_data = settings_data.model_dump(exclude_unset=True)
+    
+    # Validate prefix fields: alphanumeric, 2-5 chars, no spaces
+    for prefix_field in ['ho_prefix', 'llf_prefix']:
+        if prefix_field in update_data:
+            val = update_data[prefix_field]
+            if not re.match(r'^[A-Za-z0-9]{2,5}$', val):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{prefix_field} must be 2-5 alphanumeric characters, no spaces"
+                )
+    
     for field, value in update_data.items():
         setattr(settings, field, value)
     
@@ -54,22 +66,39 @@ def update_settings(
     return settings
 
 
+_ALLOWED_LOGO_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+
 @router.post("/logo", response_model=SettingsResponse)
 def upload_logo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    """Upload company logo (admin only)."""
+    """Upload company logo (admin only). Whitelists .png/.jpg/.jpeg/.webp only."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "png"
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in _ALLOWED_LOGO_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '.{ext}'. Allowed: png, jpg, jpeg, webp")
+
+    contents = file.file.read()
+    file.file.seek(0)
+
+    # Validate with PIL to detect spoofed extensions
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(contents))
+        img.verify()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
+
     filename = f"company_logo.{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
 
     with open(filepath, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+        f.write(contents)
 
     settings = db.query(SettingsModel).first()
     if not settings:

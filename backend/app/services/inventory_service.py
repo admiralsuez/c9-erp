@@ -8,6 +8,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def get_available_quantity(item: InventoryItem) -> Decimal:
+    """Get the quantity available for ordering.
+    
+    For containers (is_container=True with children), returns sum of children's available.
+    For parents with children, own stock is ignored — available comes from children.
+    For standalone items, returns current_quantity - reserved_quantity.
+    """
+    if item.is_container or (item.children and len(item.children) > 0):
+        return sum(
+            (c.current_quantity - c.reserved_quantity)
+            for c in item.children
+            if not c.deleted_at
+        )
+    return item.current_quantity - item.reserved_quantity
+
+
 def _lock_items(db: Session, item_ids: List[int]) -> dict:
     """Lock item rows in deterministic order (by ID) to prevent deadlocks.
     Returns dict of {id: InventoryItem} for locked rows.
@@ -115,11 +131,11 @@ def reserve_stock(db: Session, order_items: List[OrderItem], user_id: int) -> Li
         if not item:
             errors.append(f"Item #{oi.item_id}: not found")
             continue
-        available = item.current_quantity - item.reserved_quantity
+        available = get_available_quantity(item)
         if available < oi.quantity_ordered:
             errors.append(
                 f"Item {item.sku} ({item.name}): need {oi.quantity_ordered}, "
-                f"available {available} (current: {item.current_quantity}, reserved: {item.reserved_quantity})"
+                f"available {available}"
             )
             continue
 

@@ -1,25 +1,28 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_permission
 from app.models import (
-    User, InventoryItem, InventoryCategory, InventoryTransaction,
-    WarehouseBin
+    User, InventoryItem, InventoryItemAttribute, InventoryCategory, InventoryTransaction,
+    WarehouseBin, InventoryItemImage
 )
 from sqlalchemy.orm import selectinload
 from app.services.audit_service import log_audit
 from app.services.inventory_service import restock_item as svc_restock, adjust_item as svc_adjust
+from app.services.storage import get_storage_backend
 from app.schemas import (
     InventoryCategoryCreate, InventoryCategoryResponse,
     InventoryItemCreate, InventoryItemUpdate, InventoryItemResponse,
     InventoryItemDetailResponse, InventoryItemBatchCreate,
+    InventoryItemImageResponse, InventoryItemImageCreate,
     RestockRequest, AdjustmentRequest,
     InventoryTransactionResponse
 )
 from typing import List
 from decimal import Decimal
 from datetime import datetime, timezone
+import os
 import logging
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
@@ -144,37 +147,75 @@ def list_items(
     if item_type:
         query = query.filter(InventoryItem.item_type == item_type)
     
-    # Filter low stock items (uses global threshold when item minimum is 0, excludes parents)
+    # Filter low stock items (uses threshold, excludes containers, uses available = current - reserved)
     if low_stock:
-        parent_ids = set(row[0] for row in db.query(InventoryItem.parent_id).filter(
-            InventoryItem.parent_id != None,
-            InventoryItem.deleted_at == None
-        ).distinct().all() if row[0] is not None)
-        if parent_ids:
-            query = query.filter(~InventoryItem.id.in_(parent_ids))
+        query = query.filter(InventoryItem.is_container == False)
 
         from app.models import Settings as SettingsModel
         settings_row = db.query(SettingsModel).first()
         default_threshold = float(settings_row.default_low_stock_threshold) if settings_row and settings_row.default_low_stock_threshold else 10
+        # available = current - reserved; compare to minimum_quantity or default threshold
         query = query.filter(
             or_(
-                and_(InventoryItem.minimum_quantity > 0, InventoryItem.current_quantity <= InventoryItem.minimum_quantity),
-                and_(or_(InventoryItem.minimum_quantity == 0, InventoryItem.minimum_quantity == None), InventoryItem.current_quantity <= default_threshold),
+                and_(
+                    InventoryItem.minimum_quantity > 0,
+                    (InventoryItem.current_quantity - InventoryItem.reserved_quantity) <= InventoryItem.minimum_quantity
+                ),
+                and_(
+                    or_(InventoryItem.minimum_quantity == 0, InventoryItem.minimum_quantity == None),
+                    (InventoryItem.current_quantity - InventoryItem.reserved_quantity) <= default_threshold
+                ),
             )
         )
     
     # Get total count before pagination
-    total = query.count()
+    try:
+        total = query.count()
+    except Exception as e:
+        logger.error(f"Error counting inventory items: {e}")
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "size": size,
+            "pages": 0,
+            "error": "Failed to count items"
+        }
     
     skip = (page - 1) * size
-    items = query.options(
-        selectinload(InventoryItem.children)
-    ).offset(skip).limit(size).all()
+    try:
+        items = query.options(
+            selectinload(InventoryItem.children),
+            selectinload(InventoryItem.attributes),
+        ).offset(skip).limit(size).all()
+    except Exception as e:
+        logger.error(f"Error fetching inventory items: {e}")
+        return {
+            "items": [],
+            "total": total,
+            "page": page,
+            "size": size,
+            "pages": 0,
+            "error": "Failed to fetch items"
+        }
     
     total_pages = (total + size - 1) // size
     
+    # Serialize items safely
+    items_data = []
+    for item in items:
+        try:
+            items_data.append(InventoryItemResponse.model_validate(item))
+        except Exception as e:
+            logger.error(f"Error validating item {item.id} ({item.sku}): {e}")
+            # Log the full traceback to see what's wrong
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Skip items that fail validation
+            continue
+    
     return {
-        "items": [InventoryItemResponse.model_validate(i) for i in items],
+        "items": items_data,
         "total": total,
         "page": page,
         "size": size,
@@ -189,108 +230,142 @@ def create_item(
     current_user: User = Depends(require_permission("inventory.create"))
 ):
     """Create an inventory item with opening balance transaction."""
-    # Check if SKU already exists
-    existing_sku = db.query(InventoryItem).filter(
-        InventoryItem.sku == item_data.sku
-    ).first()
-    
-    if existing_sku:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Item with this SKU already exists"
-        )
-    
-    # Check if barcode already exists (if provided)
-    if item_data.barcode:
-        existing_barcode = db.query(InventoryItem).filter(
-            InventoryItem.barcode == item_data.barcode
+    try:
+        # Check if SKU already exists
+        existing_sku = db.query(InventoryItem).filter(
+            InventoryItem.sku == item_data.sku
         ).first()
         
-        if existing_barcode:
+        if existing_sku:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Item with this barcode already exists"
+                detail="Item with this SKU already exists"
             )
-    
-    # Verify category exists (if provided)
-    if item_data.category_id:
-        category = db.query(InventoryCategory).filter(
-            InventoryCategory.id == item_data.category_id
-        ).first()
-        if not category:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Category not found"
-            )
-    
-    # Verify bin exists (if provided)
-    if item_data.bin_id:
-        bin_obj = db.query(WarehouseBin).filter(
-            WarehouseBin.id == item_data.bin_id
-        ).first()
-        if not bin_obj:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Bin not found"
-            )
-    
-    # Validate one-level parent: parent must exist and must not itself be a variant
-    if item_data.parent_id:
-        parent_item = db.query(InventoryItem).filter(
-            InventoryItem.id == item_data.parent_id,
-            InventoryItem.deleted_at == None
-        ).first()
-        if not parent_item:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Parent item not found"
-            )
-        if parent_item.parent_id is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Selected parent is itself a variant — cannot nest further (one level only)"
-            )
-    
-    item = InventoryItem(
-        name=item_data.name,
-        sku=item_data.sku,
-        barcode=item_data.barcode,
-        qr_code_data=item_data.barcode,  # Use barcode as QR data for now
-        category_id=item_data.category_id,
-        parent_id=item_data.parent_id,
-        item_type=item_data.item_type,
-        current_quantity=Decimal(str(item_data.current_quantity)),
-        reserved_quantity=Decimal("0"),
-        minimum_quantity=Decimal(str(item_data.minimum_quantity)),
-        bin_id=item_data.bin_id,
-        description=item_data.description,
-        image_url=item_data.image_url
-    )
-    db.add(item)
-    db.flush()  # Get the item ID before creating transaction
-    
-    # Create opening balance transaction
-    if item_data.current_quantity > 0:
-        transaction = InventoryTransaction(
-            item_id=item.id,
-            transaction_type="opening_balance",
-            previous_quantity=Decimal("0"),
-            change_quantity=Decimal(str(item_data.current_quantity)),
-            new_quantity=Decimal(str(item_data.current_quantity)),
-            reference_type=None,
-            reference_id=None,
-            reason="Opening balance",
-            created_by=current_user.id
+        
+        # Check if barcode already exists (if provided)
+        if item_data.barcode:
+            existing_barcode = db.query(InventoryItem).filter(
+                InventoryItem.barcode == item_data.barcode
+            ).first()
+            
+            if existing_barcode:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Item with this barcode already exists"
+                )
+        
+        # Verify category exists (if provided)
+        if item_data.category_id:
+            category = db.query(InventoryCategory).filter(
+                InventoryCategory.id == item_data.category_id
+            ).first()
+            if not category:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Category not found"
+                )
+        
+        # Verify bin exists (if provided)
+        if item_data.bin_id:
+            bin_obj = db.query(WarehouseBin).filter(
+                WarehouseBin.id == item_data.bin_id
+            ).first()
+            if not bin_obj:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Bin not found"
+                )
+        
+        # Validate one-level parent: parent must exist and must not itself be a variant
+        if item_data.parent_id:
+            parent_item = db.query(InventoryItem).filter(
+                InventoryItem.id == item_data.parent_id,
+                InventoryItem.deleted_at == None
+            ).first()
+            if not parent_item:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Parent item not found"
+                )
+            if parent_item.parent_id is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Selected parent is itself a variant — cannot nest further (one level only)"
+                )
+            # Auto-mark parent as container and clear its stock
+            parent_item.is_container = True
+            parent_item.current_quantity = Decimal("0")
+        
+        # Auto-set is_container if this item has a parent_id or children provided
+        is_container = item_data.is_container
+        if is_container and item_data.parent_id:
+            raise HTTPException(status_code=400, detail="A container item cannot be a child variant")
+        
+        # Set stock to 0 for container parents
+        if is_container:
+            item_data.current_quantity = 0
+
+        item = InventoryItem(
+            name=item_data.name,
+            sku=item_data.sku,
+            barcode=item_data.barcode,
+            qr_code_data=item_data.barcode,  # Use barcode as QR data for now
+            category_id=item_data.category_id,
+            parent_id=item_data.parent_id,
+            item_type=item_data.item_type,
+            current_quantity=Decimal(str(item_data.current_quantity)),
+            reserved_quantity=Decimal("0"),
+            minimum_quantity=Decimal(str(item_data.minimum_quantity)),
+            bin_id=item_data.bin_id,
+            description=item_data.description,
+            image_url=item_data.image_url,
+            is_container=is_container
         )
-        db.add(transaction)
-    
-    db.commit()
-    db.refresh(item)
-    logger.info(
-        "CREATED item(%d) '%s' type=%s qty=%s by %s",
-        item.id, item.sku, item.item_type, item_data.current_quantity, current_user.email
-    )
-    return item
+        db.add(item)
+        db.flush()  # Get the item ID before creating transaction
+        
+        # Create attributes
+        if item_data.attributes:
+            for attr_name, attr_value in item_data.attributes.items():
+                attr = InventoryItemAttribute(
+                    item_id=item.id,
+                    attribute_name=attr_name,
+                    attribute_value=str(attr_value)
+                )
+                db.add(attr)
+        
+        # Create opening balance transaction
+        if item_data.current_quantity > 0:
+            transaction = InventoryTransaction(
+                item_id=item.id,
+                transaction_type="opening_balance",
+                previous_quantity=Decimal("0"),
+                change_quantity=Decimal(str(item_data.current_quantity)),
+                new_quantity=Decimal(str(item_data.current_quantity)),
+                reference_type=None,
+                reference_id=None,
+                reason="Opening balance",
+                created_by=current_user.id
+            )
+            db.add(transaction)
+        
+        db.commit()
+        db.refresh(item)
+        logger.info(
+            "CREATED item(%d) '%s' type=%s qty=%s by %s",
+            item.id, item.sku, item.item_type, item_data.current_quantity, current_user.email
+        )
+        return item
+    except HTTPException:
+        # Re-raise HTTP exceptions (validation errors, not found, etc.)
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating inventory item: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create item: {str(e)}"
+        )
 
 
 @router.post("/items/batch", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)
@@ -314,6 +389,10 @@ def create_items_batch(
         if not cat:
             raise HTTPException(status_code=404, detail="Category not found")
 
+    is_container = parent_data.is_container
+    if is_container:
+        parent_data.current_quantity = 0
+
     parent = InventoryItem(
         name=parent_data.name, sku=parent_data.sku,
         barcode=parent_data.barcode, qr_code_data=parent_data.barcode,
@@ -322,10 +401,21 @@ def create_items_batch(
         reserved_quantity=Decimal("0"),
         minimum_quantity=Decimal(str(parent_data.minimum_quantity)),
         bin_id=parent_data.bin_id, description=parent_data.description,
-        image_url=parent_data.image_url
+        image_url=parent_data.image_url,
+        is_container=is_container
     )
     db.add(parent)
     db.flush()
+
+    # Create parent attributes
+    if parent_data.attributes:
+        for attr_name, attr_value in parent_data.attributes.items():
+            attr = InventoryItemAttribute(
+                item_id=parent.id,
+                attribute_name=attr_name,
+                attribute_value=str(attr_value)
+            )
+            db.add(attr)
 
     if parent_data.current_quantity > 0:
         txn = InventoryTransaction(
@@ -372,6 +462,11 @@ def create_items_batch(
             )
             db.add(txn)
 
+    # Auto-set parent as container
+    if data.children:
+        parent.is_container = True
+        parent.current_quantity = Decimal("0")
+
     db.commit()
     db.refresh(parent)
     logger.info(
@@ -391,6 +486,7 @@ def get_item(
     item = db.query(InventoryItem).options(
         selectinload(InventoryItem.children),
         selectinload(InventoryItem.parent),
+        selectinload(InventoryItem.attributes),
     ).filter(
         InventoryItem.id == item_id,
         InventoryItem.deleted_at == None
@@ -459,7 +555,36 @@ def update_item(
                 detail="Target parent is itself a variant — cannot nest further (one level only)"
             )
     
-    for field, value in update_data.items():
+    # Handle is_container validation
+    if 'is_container' in update_data:
+        if update_data['is_container']:
+            has_children = db.query(InventoryItem).filter(
+                InventoryItem.parent_id == item_id,
+                InventoryItem.deleted_at == None
+            ).count()
+            if not has_children:
+                raise HTTPException(status_code=400, detail="Cannot mark as container: item has no child variants")
+            item.current_quantity = Decimal("0")
+    
+    # Handle attributes update
+    if 'attributes' in update_data:
+        db.query(InventoryItemAttribute).filter(
+            InventoryItemAttribute.item_id == item_id
+        ).delete()
+        if update_data['attributes']:
+            for attr_name, attr_value in update_data['attributes'].items():
+                attr = InventoryItemAttribute(
+                    item_id=item_id,
+                    attribute_name=attr_name,
+                    attribute_value=str(attr_value)
+                )
+                db.add(attr)
+    
+    # Exclude attributes from direct setattr (handled above), keep is_container
+    for field in update_data:
+        if field == 'attributes':
+            continue
+        value = update_data[field]
         setattr(item, field, value)
     
     db.commit()
@@ -613,3 +738,64 @@ def adjust_item(
         user_id=current_user.id,
     )
     return transaction
+
+
+# ============ ITEM PHOTO UPLOAD ============
+
+_ALLOWED_PHOTO_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "static", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@router.post("/items/{item_id}/upload-photo", response_model=InventoryItemImageResponse)
+def upload_item_photo(
+    item_id: int,
+    file: UploadFile = File(...),
+    image_type: str = Query("front", pattern="^(front|back)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.edit"))
+):
+    """Upload a photo for an inventory item (separate from item save)."""
+    item = db.query(InventoryItem).filter(
+        InventoryItem.id == item_id,
+        InventoryItem.deleted_at == None
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in _ALLOWED_PHOTO_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '.{ext}'. Allowed: png, jpg, jpeg, webp")
+
+    contents = file.file.read()
+    file.file.seek(0)
+
+    # Validate with PIL
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(contents))
+        img.verify()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
+
+    filename = f"item_{item_id}_{image_type}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    image_url = f"/static/uploads/{filename}"
+
+    # Create InventoryItemImage record
+    image_record = InventoryItemImage(
+        item_id=item_id,
+        image_type=image_type,
+        image_url=image_url,
+        uploaded_by=current_user.id
+    )
+    db.add(image_record)
+    db.commit()
+    db.refresh(image_record)
+    return image_record

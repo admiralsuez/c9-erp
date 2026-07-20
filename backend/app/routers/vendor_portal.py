@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Request, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Header
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
@@ -108,11 +108,11 @@ def request_magic_link(
     ).first()
     
     if not vendor:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Vendor not found or portal access disabled"
-        )
-    
+        # Return generic message to prevent email enumeration
+        return {
+            "message": "If a vendor with this email exists, a magic link has been sent.",
+        }
+
     # Generate short-lived JWT (15 min)
     magic_link_jwt = jose_jwt.encode(
         {
@@ -132,7 +132,7 @@ def request_magic_link(
     try:
         from app.services.email_service import get_email_service
         svc = get_email_service()
-        svc.send(
+        svc.send_email(
             to_email=vendor.email,
             subject="Your Cloud9 ERP Portal Login Link",
             body_html=f"""<h2>Cloud9 ERP Vendor Portal</h2>
@@ -150,7 +150,7 @@ def request_magic_link(
     }
 
 
-@router.post("/verify-magic-link")
+@router.get("/verify-magic-link")
 def verify_magic_link(
     token: str = Query(..., description="JWT from magic link email"),
     db: Session = Depends(get_db),

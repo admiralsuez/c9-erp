@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
 
     SHUTDOWN_EVENT = threading.Event()
 
-    async def periodic_backup():
+    def periodic_backup():
         while not SHUTDOWN_EVENT.is_set():
             try:
                 SHUTDOWN_EVENT.wait(6 * 3600)
@@ -94,7 +94,7 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(f"Auto-backup failed: {e}")
 
-    t = threading.Thread(target=lambda: asyncio.run(periodic_backup()), daemon=True)
+    t = threading.Thread(target=periodic_backup, daemon=True)
     t.start()
     logger.info("Auto-backup scheduler started (every 6 hours, max 14 files)")
 
@@ -123,7 +123,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request-logging middleware — logs every API hit with request body
+# Sensitive paths — never log request bodies for these
+_SENSITIVE_PATHS = ["/auth", "/vendor-portal", "/backup"]
+
+# Request-logging middleware — logs every API hit (redacts sensitive bodies)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.time()
@@ -136,16 +139,26 @@ async def log_requests(request: Request, call_next):
     if not skip:
         body_snippet = ""
         if request.method in ("POST", "PUT", "PATCH"):
-            try:
-                raw = await request.body()
-                if raw:
-                    decoded = raw.decode("utf-8", errors="replace")
-                    if len(decoded) > 3000:
-                        decoded = decoded[:3000] + "…[truncated]"
-                    body_snippet = f" BODY={decoded}"
-                request._body = raw
-            except Exception:
-                body_snippet = " BODY=[unreadable]"
+            is_sensitive = any(request.url.path.startswith(p) for p in _SENSITIVE_PATHS)
+            if is_sensitive:
+                # Read body for downstream use but do NOT log it
+                try:
+                    raw = await request.body()
+                    request._body = raw
+                except Exception:
+                    pass
+                body_snippet = " BODY=[redacted]"
+            else:
+                try:
+                    raw = await request.body()
+                    if raw:
+                        decoded = raw.decode("utf-8", errors="replace")
+                        if len(decoded) > 3000:
+                            decoded = decoded[:3000] + "…[truncated]"
+                        body_snippet = f" BODY={decoded}"
+                    request._body = raw
+                except Exception:
+                    body_snippet = " BODY=[unreadable]"
 
         logger.info(
             f"IN  | {client} | {request.method} {request.url.path} | "

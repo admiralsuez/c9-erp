@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, BackgroundTasks, Body
 from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy import and_, or_, func, desc
 from sqlalchemy.exc import IntegrityError
@@ -64,20 +64,19 @@ VALID_TRANSITIONS = {
 }
 
 
-def generate_order_number(db: Session, settings_format: str, location: str = "HO") -> str:
-    """Generate unique order number using settings format with location prefix."""
+def generate_order_number(db: Session, settings_format: str, location: str = "HO", attempt: int = 0) -> str:
+    """Generate unique order number using location-based prefix (HO/LLF)."""
     year = datetime.now(timezone.utc).year
     
     settings = db.query(Settings).first()
     prefix = (settings.llf_prefix if location == "LLF" else settings.ho_prefix) if settings else ("LLF" if location == "LLF" else "HO")
     
     count = db.query(func.count(Order.id)).filter(
-        func.extract('year', Order.created_at) == year,
-        Order.deleted_at == None
+        func.extract('year', Order.created_at) == year
     ).scalar() or 0
-    seq = count + 1
+    seq = count + 1 + attempt  # attempt offset prevents duplicate sequence on retry
     
-    return f"{prefix}-ORD-{year}-{seq:06d}"
+    return f"{prefix}-{year}-{seq:03d}"
 
 
 def add_timeline_entry(db: Session, order: Order, action: str, user: User, comments: str = None):
@@ -266,7 +265,7 @@ def create_order(
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            order_number = generate_order_number(db, "ORD-{YYYY}-{SEQ}", current_user.location or "HO")
+            order_number = generate_order_number(db, "ORD-{YYYY}-{SEQ}", current_user.location or "HO", attempt)
 
             # Create order
             order = Order(
@@ -321,7 +320,7 @@ def list_orders(
     search: str = Query(None),
     date_from: str = Query(None),
     date_to: str = Query(None),
-    sort_by: str = Query("recent_activity", regex="^(recent_activity|created_date)$"),
+    sort_by: str = Query("recent_activity", pattern="^(recent_activity|created_date)$"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -365,21 +364,130 @@ def list_orders(
         # Most recently created first
         query = query.order_by(desc(Order.created_at))
     
-    total = query.count()
+    try:
+        total = query.count()
+    except Exception as e:
+        logger.error(f"Error counting orders: {e}")
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "size": size,
+            "pages": 0,
+            "error": "Failed to count orders"
+        }
+    
     skip = (page - 1) * size
-    orders = query.options(
-        selectinload(Order.items).selectinload(OrderItem.item),
-        selectinload(Order.timeline_entries),
-        selectinload(Order.vendor),
-    ).offset(skip).limit(size).all()
+    try:
+        orders = query.options(
+            selectinload(Order.items).selectinload(OrderItem.item),
+            selectinload(Order.timeline_entries),
+            selectinload(Order.vendor),
+        ).offset(skip).limit(size).all()
+    except Exception as e:
+        logger.error(f"Error fetching orders: {e}")
+        return {
+            "items": [],
+            "total": total,
+            "page": page,
+            "size": size,
+            "pages": 0,
+            "error": "Failed to fetch orders"
+        }
+    
     total_pages = (total + size - 1) // size
+    
+    # Serialize orders safely
+    try:
+        orders_data = []
+        for order in orders:
+            try:
+                orders_data.append(OrderResponse.model_validate(order))
+            except Exception as e:
+                logger.error(f"Error validating order {order.id}: {e}")
+                # Skip orders that fail validation
+                continue
+    except Exception as e:
+        logger.error(f"Error serializing orders: {e}")
+        orders_data = []
+    
     return {
-        "items": [OrderResponse.model_validate(o) for o in orders],
+        "items": orders_data,
         "total": total,
         "page": page,
         "size": size,
         "pages": total_pages
     }
+
+
+@router.get("/available-items")
+def list_available_items(
+    category_id: int = Query(None),
+    search: str = Query(None),
+    attributes: str = Query(None, description="JSON filter e.g. {\"usage\": \"events_only\"}"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List available items for order placement, including attributes for filtering."""
+    try:
+        query = db.query(InventoryItem).options(
+            selectinload(InventoryItem.attributes),
+        ).filter(
+            InventoryItem.deleted_at == None,
+            InventoryItem.is_active == True,
+            InventoryItem.is_container == False,  # Only sellable items
+        )
+
+        if category_id:
+            query = query.filter(InventoryItem.category_id == category_id)
+
+        if search:
+            query = query.filter(
+                or_(
+                    InventoryItem.name.ilike(f"%{search}%"),
+                    InventoryItem.sku.ilike(f"%{search}%"),
+                    InventoryItem.barcode.ilike(f"%{search}%"),
+                )
+            )
+
+        items = query.all()
+    except Exception as e:
+        logger.error(f"Error fetching available items: {e}")
+        return []
+
+    # Filter by attributes if specified
+    if attributes:
+        import json
+        try:
+            attr_filter = json.loads(attributes)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid attributes filter JSON")
+        filtered = []
+        for item in items:
+            try:
+                item_attrs = {a.attribute_name: a.attribute_value for a in (item.attributes or [])}
+                if all(item_attrs.get(k) == v for k, v in attr_filter.items()):
+                    filtered.append(item)
+            except Exception as e:
+                logger.error(f"Error filtering item {item.id}: {e}")
+                # Skip items that fail filtering
+                continue
+        items = filtered
+
+    # Serialize items safely
+    try:
+        result = []
+        for item in items:
+            try:
+                result.append(InventoryItemResponse.model_validate(item))
+            except Exception as e:
+                logger.error(f"Error validating item {item.id}: {e}")
+                # Skip items that fail validation
+                continue
+        return result
+    except Exception as e:
+        logger.error(f"Error serializing available items: {e}")
+        return []
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
@@ -474,6 +582,7 @@ def update_order(
 def submit_requisition(
     order_id: int,
     approver_id: int = Query(..., description="User ID of the approver"),
+    use_vendor_address: bool = Query(False, description="Use vendor address as delivery address"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -503,6 +612,15 @@ def submit_requisition(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Order must have at least one item"
         )
+    
+    # Validate vendor address if using vendor address as delivery address
+    if use_vendor_address:
+        if not order.vendor or not order.vendor.address:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Vendor does not have an address. Please select a delivery address or update vendor details."
+            )
+        order.delivery_address = order.vendor.address
     
     # Validate approver
     approver = db.query(User).filter(
@@ -782,10 +900,11 @@ def approve_order(
 @router.post("/{order_id}/approve-with-signature", response_model=OrderResponse)
 def approve_with_signature(
     order_id: int,
-    signature_data: str = Query(..., description="Base64-encoded signature image (with or without data:image/png;base64 prefix)"),
+    body: dict = Body(..., embed=False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    signature_data = body.get("signature_data", "")
     """Approve order with e-signature. Auto-generates signed PDF."""
     order = db.query(Order).options(
         selectinload(Order.items).selectinload(OrderItem.item),
@@ -1176,12 +1295,16 @@ def return_order(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Item #{oi.item_id} is not returnable")
         if ret.quantity_returned <= 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Return quantity must be positive")
+        if ret.quantity_damaged < 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Damaged quantity cannot be negative")
+        if ret.quantity_damaged > ret.quantity_returned:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Damaged quantity cannot exceed returned quantity")
 
-        remaining = oi.quantity_dispatched - oi.quantity_returned - oi.quantity_damaged
-        if ret.quantity_returned + ret.quantity_damaged > remaining:
+        remaining = oi.quantity_dispatched - oi.quantity_returned
+        if ret.quantity_returned > remaining:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Item #{oi.item_id}: only {remaining} units left to return (dispatched: {oi.quantity_dispatched}, already returned: {oi.quantity_returned}, already damaged: {oi.quantity_damaged})"
+                detail=f"Item #{oi.item_id}: only {remaining} units left to return (dispatched: {oi.quantity_dispatched}, already returned: {oi.quantity_returned})"
             )
 
         item = locked.get(oi.item_id)

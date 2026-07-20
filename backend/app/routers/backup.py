@@ -57,7 +57,7 @@ def _backup_db(destination: str) -> str:
             "--port", _PG_PORT,
             "--username", _PG_USER,
             "--dbname", _PG_DB,
-            "--format", "custom",
+            "--format", "plain",
             "--file", dump_path,
         ]
         result = subprocess.run(cmd, env=_pg_env(), capture_output=True, text=True, timeout=300)
@@ -272,7 +272,7 @@ def email_backup(
 <p>Attached: {filename}</p>
 <p style="margin-top:20px;color:#888;">This is an automated backup from your Cloud9 ERP system.</p>
 """
-        success = email_service.send(to_email=email, subject=f"Cloud9 ERP Backup - {timestamp}", body_html=html_body, attachments=attachments)
+        success = email_service.send_email(to_email=email, subject=f"Cloud9 ERP Backup - {timestamp}", body_html=html_body, attachments=attachments)
         results.append({"email": email, "sent": success})
         logger.info(f"Backup emailed to {email}: {'sent' if success else 'failed'}")
 

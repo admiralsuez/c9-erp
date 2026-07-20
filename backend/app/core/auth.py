@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models import User, RefreshToken
 import hashlib
+import secrets as _secrets
 
 security = HTTPBearer()
 
@@ -29,7 +30,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             hashed_password.encode('utf-8')
         )
     # Legacy SHA-256 hashes (from before bcrypt migration)
-    return hashlib.sha256(plain_password.encode('utf-8')).hexdigest() == hashed_password
+    # Use constant-time comparison to prevent timing attacks
+    expected = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
+    return _secrets.compare_digest(expected, hashed_password)
 
 
 def create_access_token(user_id: int, expires_delta: Optional[timedelta] = None) -> str:
@@ -45,15 +48,22 @@ def create_access_token(user_id: int, expires_delta: Optional[timedelta] = None)
 
 
 def create_refresh_token(user_id: int, db: Session) -> str:
-    """Create a refresh token and store it in the database."""
+    """Create a refresh token with jti and exp, store hash in database."""
+    token_id = _secrets.token_urlsafe(16)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRATION_DAYS)
+    
     token = jwt.encode(
-        {"sub": str(user_id), "type": "refresh"},
+        {
+            "sub": str(user_id),
+            "type": "refresh",
+            "jti": token_id,
+            "exp": expires_at,
+        },
         settings.JWT_SECRET,
         algorithm=settings.JWT_ALGORITHM
     )
     
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRATION_DAYS)
     
     refresh_token = RefreshToken(
         user_id=user_id,
@@ -63,7 +73,6 @@ def create_refresh_token(user_id: int, db: Session) -> str:
     )
     db.add(refresh_token)
     db.commit()
-    
     return token
 
 

@@ -236,6 +236,7 @@ class InventoryItem(Base):
     bin_id = Column(Integer, ForeignKey("warehouse_bins.id"))
     description = Column(Text)
     image_url = Column(String(500))
+    is_container = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
@@ -246,6 +247,7 @@ class InventoryItem(Base):
     transactions = relationship("InventoryTransaction", back_populates="item")
     images = relationship("InventoryItemImage", back_populates="item", cascade="all, delete-orphan")
     serial_numbers = relationship("SerialNumber", back_populates="item", cascade="all, delete-orphan")
+    attributes = relationship("InventoryItemAttribute", back_populates="item", cascade="all, delete-orphan")
     parent = relationship("InventoryItem", remote_side=[id], back_populates="children")
     children = relationship("InventoryItem", back_populates="parent", cascade="all, delete-orphan")
     
@@ -256,6 +258,23 @@ class InventoryItem(Base):
         Index("idx_inventory_parent", "parent_id"),
         Index("idx_inventory_deleted_at", "deleted_at"),
         Index("idx_inventory_low_stock", "current_quantity", "minimum_quantity"),
+    )
+
+
+class InventoryItemAttribute(Base):
+    __tablename__ = "inventory_item_attributes"
+    
+    id = Column(Integer, primary_key=True)
+    item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
+    attribute_name = Column(String(100), nullable=False)
+    attribute_value = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    
+    item = relationship("InventoryItem", back_populates="attributes")
+    
+    __table_args__ = (
+        UniqueConstraint("item_id", "attribute_name", name="uq_item_attribute"),
+        Index("idx_item_attr_name", "attribute_name"),
     )
 
 

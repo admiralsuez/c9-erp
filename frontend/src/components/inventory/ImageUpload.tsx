@@ -109,7 +109,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       formData.append('file', image.file);
       formData.append('image_type', imageType);
 
-      const response = await fetch(`/api/inventory/${itemId}/images?image_type=${imageType}`, {
+      const response = await fetch(`/api/inventory/items/${itemId}/upload-photo?image_type=${imageType}`, {
         method: 'POST',
         body: formData,
         headers: {

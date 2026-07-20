@@ -22,6 +22,7 @@ import {
   Save,
   X,
   Plus,
+  Info,
 } from 'lucide-react';
 import {
   useOrder,
@@ -452,6 +453,14 @@ export const OrderDetailPage: React.FC = () => {
             </p>
           </div>
         </div>
+
+        {/* Draft edit hint */}
+        {!isEditing && order.status === 'draft' && (
+          <div className="px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 flex items-center gap-2">
+            <Info size={16} />
+            You can edit this order. Changes will be saved when you submit.
+          </div>
+        )}
 
         {/* Lifecycle Action Buttons */}
         <div className="flex gap-2 flex-wrap">

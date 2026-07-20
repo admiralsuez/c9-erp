@@ -4,7 +4,7 @@ from sqlalchemy.pool import NullPool, QueuePool
 from app.core.config import settings
 import os
 
-DATABASE_URL = settings.DATABASE_URL or os.getenv("DATABASE_URL", "sqlite:///./erp_local.db")
+DATABASE_URL = settings.DATABASE_URL
 
 # QueuePool for PostgreSQL (production), NullPool for SQLite (dev)
 use_queue_pool = DATABASE_URL.startswith("postgresql")

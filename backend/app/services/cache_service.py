@@ -73,9 +73,20 @@ class CacheService:
         """
         try:
             if key in self.cache:
+                entry = self.cache[key]
+                # Support ttl_override by checking expiry tuple
+                if isinstance(entry, tuple) and len(entry) == 2:
+                    value, expiry = entry
+                    if expiry is not None and datetime.now(timezone.utc) > expiry:
+                        del self.cache[key]
+                        self.stats['misses'] += 1
+                        return None
+                    self.stats['hits'] += 1
+                    logger.debug(f"Cache hit for key: {key}")
+                    return value
                 self.stats['hits'] += 1
                 logger.debug(f"Cache hit for key: {key}")
-                return self.cache[key]
+                return entry
             else:
                 self.stats['misses'] += 1
                 logger.debug(f"Cache miss for key: {key}")
@@ -94,7 +105,11 @@ class CacheService:
             ttl_override: Override TTL for this key (in seconds)
         """
         try:
-            self.cache[key] = value
+            if ttl_override is not None:
+                expiry = datetime.now(timezone.utc) + timedelta(seconds=ttl_override)
+                self.cache[key] = (value, expiry)
+            else:
+                self.cache[key] = value
             self.stats['sets'] += 1
             logger.debug(f"Cached value for key: {key}")
         except Exception as e:
@@ -142,6 +157,9 @@ class CacheService:
             'cache_size': len(self.cache),
         }
     
+    # Sentinel to distinguish None results from cache misses
+    _SENTINEL = object()
+
     def cached(
         self,
         ttl: Optional[int] = None,
@@ -169,14 +187,14 @@ class CacheService:
                 
                 # Try to get from cache
                 cached_value = self.get(cache_key)
-                if cached_value is not None:
+                if cached_value is not self._SENTINEL:
                     return cached_value
                 
                 # Execute function
                 result = func(*args, **kwargs)
                 
-                # Cache result
-                self.set(cache_key, result)
+                # Cache result (use tuple wrapper to distinguish None from cache miss)
+                self.set(cache_key, result if result is not None else self._SENTINEL, ttl)
                 
                 return result
             
@@ -320,7 +338,9 @@ class ResponseCache:
         """
         key = self._generate_response_key(endpoint, method, params)
         self.cache_service.set(key, response_data, ttl)
-        self.response_keys[endpoint] = key
+        if endpoint not in self.response_keys:
+            self.response_keys[endpoint] = set()
+        self.response_keys[endpoint].add(key)
         logger.debug(f"Cached response for {method} {endpoint}")
         return key
     
@@ -347,8 +367,8 @@ class ResponseCache:
     def invalidate_endpoint(self, endpoint: str):
         """Invalidate cache for endpoint."""
         if endpoint in self.response_keys:
-            key = self.response_keys[endpoint]
-            self.cache_service.delete(key)
+            for key in self.response_keys[endpoint]:
+                self.cache_service.delete(key)
             del self.response_keys[endpoint]
             logger.debug(f"Invalidated cache for {endpoint}")
     
@@ -378,6 +398,7 @@ class QueryCache:
     
     def __init__(self, cache_service: Optional[CacheService] = None):
         self.cache_service = cache_service or CacheService()
+        self._model_keys: Dict[str, set] = {}
     
     def cache_query_result(
         self,
@@ -388,6 +409,9 @@ class QueryCache:
         """Cache query result."""
         key = f"query:{model_name}:{query_id}"
         self.cache_service.set(key, result)
+        if model_name not in self._model_keys:
+            self._model_keys[model_name] = set()
+        self._model_keys[model_name].add(key)
     
     def get_query_result(
         self,
@@ -399,10 +423,11 @@ class QueryCache:
         return self.cache_service.get(key)
     
     def invalidate_model(self, model_name: str):
-        """Invalidate all queries for a model."""
-        # This is a simplified implementation
-        # In production, would track keys per model
-        logger.debug(f"Invalidating cache for model: {model_name}")
+        """Invalidate all cached queries for a model."""
+        keys = self._model_keys.pop(model_name, set())
+        for key in keys:
+            self.cache_service.delete(key)
+        logger.debug(f"Invalidated {len(keys)} cache entries for model: {model_name}")
 
 
 def get_cache_service(config: Optional[CacheConfig] = None) -> CacheService:

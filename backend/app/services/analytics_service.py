@@ -67,12 +67,19 @@ class AnalyticsService:
     
     def _get_avg_approval_time(self) -> float:
         """Calculate average time from requisition submission to approval."""
-        approved_orders = self.db.query(Order).options(
-            joinedload(Order.timeline_entries)
-        ).filter(
-            Order.status.in_(["approved", "dispatched", "delivered", "closed"]),
-            Order.deleted_at == None
-        ).all()
+        try:
+            approved_orders = self.db.query(Order).options(
+                joinedload(Order.timeline_entries)
+            ).filter(
+                Order.status.in_(["approved", "dispatched", "delivered", "closed"]),
+                Order.deleted_at == None
+            ).all()
+        except Exception:
+            # If eager loading fails, use lazy load
+            approved_orders = self.db.query(Order).filter(
+                Order.status.in_(["approved", "dispatched", "delivered", "closed"]),
+                Order.deleted_at == None
+            ).all()
         
         if not approved_orders:
             return 0
@@ -101,12 +108,19 @@ class AnalyticsService:
     
     def _get_avg_dispatch_time(self) -> float:
         """Calculate average time from approval to dispatch."""
-        dispatched_orders = self.db.query(Order).options(
-            joinedload(Order.timeline_entries)
-        ).filter(
-            Order.status.in_(["dispatched", "delivered", "closed"]),
-            Order.deleted_at == None
-        ).all()
+        try:
+            dispatched_orders = self.db.query(Order).options(
+                joinedload(Order.timeline_entries)
+            ).filter(
+                Order.status.in_(["dispatched", "delivered", "closed"]),
+                Order.deleted_at == None
+            ).all()
+        except Exception:
+            # If eager loading fails, use lazy load
+            dispatched_orders = self.db.query(Order).filter(
+                Order.status.in_(["dispatched", "delivered", "closed"]),
+                Order.deleted_at == None
+            ).all()
         
         if not dispatched_orders:
             return 0
@@ -135,43 +149,35 @@ class AnalyticsService:
     # ============ INVENTORY METRICS ============
     
     def get_low_stock_items(self, threshold: float = None) -> list:
-        """Get items below minimum quantity (excludes parent items with children)."""
+        """Get items below minimum quantity (excludes containers, uses available qty)."""
         from app.models import Settings
         if threshold is None:
             global_setting = self.db.query(Settings).first()
             threshold = float(global_setting.default_low_stock_threshold) if global_setting and global_setting.default_low_stock_threshold else 10
 
-        parent_ids = set(row[0] for row in self.db.query(InventoryItem.parent_id).filter(
-            InventoryItem.parent_id != None,
-            InventoryItem.deleted_at == None
-        ).distinct().all() if row[0] is not None)
-
         q = self.db.query(InventoryItem).filter(
             InventoryItem.is_active == True,
             InventoryItem.deleted_at == None,
+            InventoryItem.is_container == False,
         )
-        if parent_ids:
-            q = q.filter(~InventoryItem.id.in_(parent_ids))
+
         items = q.all()
 
-        return [
-            item for item in items
-            if item.current_quantity <= (item.minimum_quantity if item.minimum_quantity and item.minimum_quantity > 0 else threshold)
-        ]
+        result = []
+        for item in items:
+            available = float(item.current_quantity - item.reserved_quantity)
+            min_qty = float(item.minimum_quantity) if item.minimum_quantity and item.minimum_quantity > 0 else threshold
+            if available < min_qty:
+                result.append(item)
+        return result
     
     def get_inventory_health(self) -> dict:
-        """Get inventory health metrics (excludes parent items with children)."""
-        parent_ids = set(row[0] for row in self.db.query(InventoryItem.parent_id).filter(
-            InventoryItem.parent_id != None,
-            InventoryItem.deleted_at == None
-        ).distinct().all() if row[0] is not None)
-
+        """Get inventory health metrics (excludes containers)."""
         base_filter = [
             InventoryItem.is_active == True,
             InventoryItem.deleted_at == None,
+            InventoryItem.is_container == False,
         ]
-        if parent_ids:
-            base_filter.append(~InventoryItem.id.in_(parent_ids))
 
         low_stock = self.get_low_stock_items()
         
@@ -183,8 +189,13 @@ class AnalyticsService:
             "total_items": self.db.query(InventoryItem).filter(*base_filter).count(),
             "low_stock_count": len(low_stock),
             "low_stock_items": [
-                {"id": item.id, "sku": item.sku, "name": item.name, 
-                 "current": float(item.current_quantity), "minimum": float(item.minimum_quantity)}
+                {
+                    "id": item.id, "sku": item.sku, "name": item.name,
+                    "current": float(item.current_quantity),
+                    "reserved": float(item.reserved_quantity),
+                    "available": float(item.current_quantity - item.reserved_quantity),
+                    "minimum": float(item.minimum_quantity),
+                }
                 for item in low_stock[:10]  # Top 10
             ],
             "total_quantity": float(total_value),
@@ -212,15 +223,27 @@ class AnalyticsService:
     
     def get_vendor_delivery_performance(self, vendor_id: int = None) -> dict:
         """Get vendor on-time delivery metrics."""
-        query = self.db.query(Order).filter(
-            Order.status.in_(["delivered", "closed"]),
-            Order.deleted_at == None
-        )
-        
-        if vendor_id:
-            query = query.filter(Order.vendor_id == vendor_id)
-        
-        delivered_orders = query.all()
+        try:
+            query = self.db.query(Order).options(
+                joinedload(Order.timeline_entries)
+            ).filter(
+                Order.status.in_(["delivered", "closed"]),
+                Order.deleted_at == None
+            )
+            
+            if vendor_id:
+                query = query.filter(Order.vendor_id == vendor_id)
+            
+            delivered_orders = query.all()
+        except Exception:
+            # Fallback to lazy load
+            query = self.db.query(Order).filter(
+                Order.status.in_(["delivered", "closed"]),
+                Order.deleted_at == None
+            )
+            if vendor_id:
+                query = query.filter(Order.vendor_id == vendor_id)
+            delivered_orders = query.all()
         
         if not delivered_orders:
             return {"total_delivered": 0, "on_time": 0, "late": 0, "on_time_percentage": 0}
@@ -311,17 +334,67 @@ class AnalyticsService:
         period_days = 30
         if date_from and date_to:
             period_days = max(1, (date_to - date_from).days)
+        
+        try:
+            # Get recent orders and serialize them
+            recent = self.get_recent_orders(5, date_from, date_to)
+            recent_orders_data = [
+                {
+                    "id": o.id,
+                    "order_number": o.order_number,
+                    "vendor_id": o.vendor_id,
+                    "vendor_name": o.vendor.name if o.vendor else "",
+                    "status": o.status,
+                    "created_at": o.created_at.isoformat() if o.created_at else "",
+                    "item_count": len(o.items) if o.items else 0,
+                }
+                for o in recent
+            ]
+        except Exception as e:
+            logger.error(f"Error getting recent orders: {e}")
+            recent_orders_data = []
+        
+        try:
+            order_metrics = self.get_order_metrics(date_from, date_to)
+        except Exception as e:
+            logger.error(f"Error getting order metrics: {e}")
+            order_metrics = {"total_orders": 0, "by_status": {}, "pending_approvals": 0, "average_approval_time_days": 0, "average_dispatch_time_days": 0}
+        
+        try:
+            inventory_health = self.get_inventory_health()
+        except Exception as e:
+            logger.error(f"Error getting inventory health: {e}")
+            inventory_health = {"total_items": 0, "low_stock_count": 0, "low_stock_items": [], "total_quantity": 0}
+        
+        try:
+            vendor_perf = self.get_vendor_performance()
+        except Exception as e:
+            logger.error(f"Error getting vendor performance: {e}")
+            vendor_perf = []
+        
+        try:
+            email_stats = self.get_email_stats(period_days)
+        except Exception as e:
+            logger.error(f"Error getting email stats: {e}")
+            email_stats = {"period_days": period_days, "total_emails": 0, "by_status": {}, "failed_count": 0, "sent_count": 0}
+        
+        try:
+            user_activity = self.get_user_activity(period_days)
+        except Exception as e:
+            logger.error(f"Error getting user activity: {e}")
+            user_activity = {"period_days": period_days, "active_users": 0, "total_actions": 0, "orders_created": 0, "top_actions": {}}
+        
         return {
             "overview": {
-                "total_orders": self.get_total_orders(date_from, date_to),
-                "pending_approvals": self.get_pending_approvals(date_from, date_to),
-                "recent_orders": self.get_recent_orders(5, date_from, date_to),
+                "total_orders": order_metrics.get("total_orders", 0),
+                "pending_approvals": order_metrics.get("pending_approvals", 0),
+                "recent_orders": recent_orders_data,
             },
-            "order_metrics": self.get_order_metrics(date_from, date_to),
-            "inventory_health": self.get_inventory_health(),
-            "vendor_performance": self.get_vendor_performance(),
-            "email_stats": self.get_email_stats(period_days),
-            "user_activity": self.get_user_activity(period_days),
+            "order_metrics": order_metrics,
+            "inventory_health": inventory_health,
+            "vendor_performance": vendor_perf,
+            "email_stats": email_stats,
+            "user_activity": user_activity,
             "calculated_at": datetime.now(timezone.utc).isoformat(),
         }
 

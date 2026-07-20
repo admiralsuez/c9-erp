@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, ConfigDict, computed_field
+from pydantic import BaseModel, EmailStr, ConfigDict, computed_field, field_validator
 from datetime import datetime
 from typing import Optional, List
 
@@ -246,6 +246,8 @@ class InventoryItemBase(BaseModel):
     description: Optional[str] = None
     image_url: Optional[str] = None
     parent_id: Optional[int] = None
+    is_container: bool = False
+    attributes: Optional[dict] = None
 
 
 class InventoryItemCreate(InventoryItemBase):
@@ -279,6 +281,8 @@ class InventoryItemUpdate(BaseModel):
     description: Optional[str] = None
     image_url: Optional[str] = None
     parent_id: Optional[int] = None
+    is_container: Optional[bool] = None
+    attributes: Optional[dict] = None
 
 
 class InventoryTransactionResponse(BaseModel):
@@ -301,15 +305,28 @@ class InventoryItemResponse(InventoryItemBase):
     current_quantity: float
     reserved_quantity: float
     is_active: bool
+    is_container: bool = False
     created_at: datetime
     updated_at: datetime
     children: List['InventoryItemResponse'] = []
+    attributes: Optional[dict] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
+    
+    @field_validator('attributes', mode='before')
+    @classmethod
+    def convert_attributes(cls, v):
+        """Convert ORM attributes list to dict."""
+        if isinstance(v, list) and v:
+            # Convert list of ORM objects to dict
+            return {attr.attribute_name: attr.attribute_value for attr in v}
+        return v or None
 
     @computed_field
     @property
     def available_quantity(self) -> float:
+        if self.is_container and self.children:
+            return sum(c.available_quantity for c in self.children)
         return self.current_quantity - self.reserved_quantity
 
 

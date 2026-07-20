@@ -615,12 +615,3 @@ class SignatureResponse(BaseModel):
 
 class SignatureUpdate(BaseModel):
     signature_data: str
-
-
-# ============ RESOLVE FORWARD REFERENCES (Pydantic v2) ============
-TokenResponse.model_rebuild()
-InventoryItemResponse.model_rebuild()
-InventoryItemDetailResponse.model_rebuild()
-OrderItemResponse.model_rebuild()
-OrderResponse.model_rebuild()
-InventoryItemImageResponse.model_rebuild()

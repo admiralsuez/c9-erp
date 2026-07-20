@@ -3,23 +3,6 @@ from datetime import datetime
 from typing import Optional, List
 
 
-# ============ AUTH ============
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    user: Optional['UserResponse'] = None
-
-
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str
-
-
 # ============ USERS & ROLES ============
 class PermissionSchema(BaseModel):
     id: int
@@ -79,6 +62,23 @@ class UserResponse(UserBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============ AUTH ============
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: Optional[UserResponse] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 # ============ SETTINGS ============

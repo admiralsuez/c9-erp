@@ -282,14 +282,14 @@ def get_or_create_admin():
         
         admin_user = User(
             full_name="System Administrator",
-            email="admin@localhost.com",
+            email="vibin.cloud9@gmail.com",
             password_hash=hash_password("admin@123"),
             role_id=admin_role.id,
             department="Administration"
         )
         db.add(admin_user)
         db.commit()
-        print("[+] Initial Admin user created: admin@localhost.com / admin@123")
+        print("[+] Initial Admin user created: vibin.cloud9@gmail.com / admin@123")
         return True
     else:
         print(f"[✓] Admin user exists: {admin_user.email}")
@@ -332,7 +332,7 @@ def main():
         
         if admin_created:
             print("🔐 FIRST-TIME SETUP - Admin Account Created")
-            print("   Email: admin@localhost.com")
+            print("   Email: vibin.cloud9@gmail.com")
             print("   Password: admin@123")
             print("\n   ⚠️  IMPORTANT: Change this password in Settings after first login!\n")
         
@@ -341,7 +341,7 @@ def main():
         print("  ├─ Manager: manager@example.com / manager123")
         print("  └─ Warehouse: warehouse@example.com / warehouse123")
         print("\nAdditional Setup Credentials:")
-        print("  └─ Initial Admin: admin@localhost.com / admin@123")
+        print("  └─ Initial Admin: vibin.cloud9@gmail.com / admin@123")
         print()
         print("Features now available:")
         print("  ✓ Dashboard & Analytics")

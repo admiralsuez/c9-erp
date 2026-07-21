@@ -206,7 +206,7 @@ if (-not $SkipFrontend) {
         Write-Host "Creating sample .env file..." -ForegroundColor Yellow
         
         $envContent = @"
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=http://64.227.191.1:5173
 VITE_APP_NAME=C9 ERP
 "@
         Set-Content -Path $envFile -Value $envContent

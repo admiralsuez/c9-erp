@@ -4,7 +4,7 @@ FROM node:20-alpine as builder
 WORKDIR /app
 
 # Accept build-time API URL (defaults to localhost for local dev)
-ARG VITE_API_URL=http://64.227.191.1:5173
+ARG VITE_API_URL=http://64.227.191.1:8000
 ENV VITE_API_URL=$VITE_API_URL
 
 # Copy package files

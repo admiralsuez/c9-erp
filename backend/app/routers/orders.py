@@ -660,7 +660,7 @@ def submit_requisition(
             company_name=settings_dict.get("company_name", "Cloud9")
         )
         
-        order_url = f"http://64.227.191.1:5173/orders/{order.id}"
+        order_url = f"http://64.227.191.1:8000/orders/{order.id}"
         pdf_content = pdf_generator.generate_requisition(
             order_number=order.order_number,
             vendor_name=order.vendor.name,

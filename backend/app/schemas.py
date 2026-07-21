@@ -1,9 +1,20 @@
+from __future__ import annotations
 from pydantic import BaseModel, EmailStr, ConfigDict, computed_field, field_validator
 from datetime import datetime
 from typing import Optional, List
 
 
-# ============ USERS & ROLES ============
+# ============ AUTH ============
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserBase(BaseModel):
+    full_name: str
+    email: EmailStr
+    department: Optional[str] = None
+    location: str = "HO"
+
 class PermissionSchema(BaseModel):
     id: int
     code: str
@@ -21,6 +32,31 @@ class RoleSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserResponse(UserBase):
+    id: int
+    email: str
+    role: Optional[RoleSchema] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: Optional['UserResponse'] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+# ============ USERS & ROLES ============
+
+
+
 class RoleCreate(BaseModel):
     name: str
     description: Optional[str] = None
@@ -33,11 +69,6 @@ class RoleUpdate(BaseModel):
     permission_ids: Optional[List[int]] = None
 
 
-class UserBase(BaseModel):
-    full_name: str
-    email: EmailStr
-    department: Optional[str] = None
-    location: str = "HO"
 
 
 class UserCreate(UserBase):
@@ -52,16 +83,6 @@ class UserUpdate(BaseModel):
     role_id: Optional[int] = None
     location: Optional[str] = None
 
-
-class UserResponse(UserBase):
-    id: int
-    email: str
-    role: Optional[RoleSchema] = None
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 # ============ AUTH ============
@@ -329,15 +350,6 @@ class InventoryItemResponse(InventoryItemBase):
             return sum(c.available_quantity for c in self.children)
         return self.current_quantity - self.reserved_quantity
 
-
-class InventoryItemDetailResponse(InventoryItemResponse):
-    transactions: List[InventoryTransactionResponse] = []
-    images: List['InventoryItemImageResponse'] = []
-    serial_numbers: List['SerialNumberResponse'] = []
-    parent: Optional['InventoryItemResponse'] = None
-
-
-# ============ INVENTORY ITEM IMAGES ============
 class InventoryItemImageResponse(BaseModel):
     id: int
     item_id: int
@@ -348,12 +360,6 @@ class InventoryItemImageResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-
-class InventoryItemImageCreate(BaseModel):
-    image_type: str
-
-
-# ============ SERIAL NUMBERS ============
 class SerialNumberResponse(BaseModel):
     id: int
     item_id: int
@@ -368,6 +374,22 @@ class SerialNumberResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+
+class InventoryItemDetailResponse(InventoryItemResponse):
+    transactions: List[InventoryTransactionResponse] = []
+    images: List['InventoryItemImageResponse'] = []
+    serial_numbers: List['SerialNumberResponse'] = []
+    parent: Optional['InventoryItemResponse'] = None
+
+
+# ============ INVENTORY ITEM IMAGES ============
+
+class InventoryItemImageCreate(BaseModel):
+    image_type: str
+
+
+# ============ SERIAL NUMBERS ============
 
 class SerialNumberCreate(BaseModel):
     count: int = 1

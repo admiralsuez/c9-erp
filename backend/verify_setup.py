@@ -16,7 +16,7 @@ from app.models import User
 db = SessionLocal()
 
 try:
-    admin = db.query(User).filter(User.email == "admin@localhost").first()
+    admin = db.query(User).filter(User.email == "admin@localhost.com").first()
     
     if admin:
         print("\n" + "="*60)
@@ -32,7 +32,7 @@ try:
         if admin.role and admin.role.name == "Admin":
             print("\n[✓] Admin has correct Admin role")
             print("\nYou can now:")
-            print("  • Login with: admin@localhost / admin@123")
+            print("  • Login with: admin@localhost.com / admin@123")
             print("  • Access backup features")
             print("  • Manage users and permissions")
             print("  • Configure system settings")

@@ -65,14 +65,11 @@ services:
       - "${FRONTEND_PORT:-5173}:5173"
     depends_on:
       - api
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     restart: unless-stopped
     networks:
       - c9erp-network
     environment:
-      - VITE_API_URL=${VITE_API_URL:-http://64.227.191.1:5173}
+      - VITE_API_URL=http://64.227.191.1:5173
 
 volumes:
   postgres_data:

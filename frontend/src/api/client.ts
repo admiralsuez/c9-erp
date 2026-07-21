@@ -2,7 +2,20 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://64.227.191.1:8000';
+const getApiBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl !== '/api') {
+    return envUrl;
+  }
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    return `${protocol}//${hostname}:8000`;
+  }
+  return 'http://localhost:8000';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({

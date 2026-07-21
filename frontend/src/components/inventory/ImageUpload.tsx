@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, X, CheckCircle2, AlertCircle } from 'lucide-react';
+import { API_BASE_URL } from '../../api/client';
 
 interface ImageUploadProps {
   itemId?: number;
@@ -109,7 +110,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       formData.append('file', image.file);
       formData.append('image_type', imageType);
 
-      const response = await fetch(`/api/inventory/items/${itemId}/upload-photo?image_type=${imageType}`, {
+      const response = await fetch(`${API_BASE_URL}/inventory/items/${itemId}/upload-photo?image_type=${imageType}`, {
         method: 'POST',
         body: formData,
         headers: {

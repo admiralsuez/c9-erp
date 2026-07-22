@@ -1,79 +1,71 @@
-name: cloud9-erp
+spec:
+  name: cloud9-erp
 
 services:
-  - name: frontend
-    github:
-      branch: main
-      repo: admiralsuez/c9-erp
-    source_dir: frontend
-    build_command: npm install && npm run build
-    environment_slug: node-js
-    envs:
-      - key: VITE_API_URL
-        value: https://api.cloud9beverages.com
-    http_port: 3000
-    routes:
-      - path: /
-        preserve_path_prefix: true
-    catchall_document: index.html
+- name: frontend
+  github:
+    repo: admiralsuez/c9-erp
+    branch: main
+  source_dir: frontend
+  build_command: npm install && npm run build
+  environment_slug: node-js
+  http_port: 3000
+  routes:
+  - path: /
+  catchall_document: index.html
+  envs:
+  - key: VITE_API_URL
+    value: https://api.cloud9beverages.com
 
-  - name: backend
-    github:
-      branch: main
-      repo: admiralsuez/c9-erp
-    source_dir: backend
-    build_command: pip install --no-cache-dir -r requirements.txt
-    run_command: ./start.sh
-    http_port: 8000
-    environment_slug: python
-    envs:
-      - key: DATABASE_URL
-        scope: RUN_AND_BUILD_TIME
-        value: ${db.DATABASE_URL}
-      - key: CORS_ORIGINS
-        value: https://erp.cloud9beverages.com
-      - key: ENVIRONMENT
-        value: production
-      - key: DEBUG
-        value: "false"
-      - key: LOG_LEVEL
-        value: INFO
-      - key: JWT_ALGORITHM
-        value: HS256
-      - key: JWT_EXPIRATION_HOURS
-        value: "24"
-      - key: REFRESH_TOKEN_EXPIRATION_DAYS
-        value: "30"
-      - key: JWT_SECRET
-        type: SECRET
-        value: JWT_SECRET
-    routes:
-      - path: /api
-        preserve_path_prefix: true
-    health_check:
-      http:
-        path: /health
-        port: 8000
-      initial_delay_seconds: 30
-      period_seconds: 10
-      timeout_seconds: 5
-      success_threshold: 2
-      failure_threshold: 3
+- name: backend
+  github:
+    repo: admiralsuez/c9-erp
+    branch: main
+  source_dir: backend
+  build_command: pip install --no-cache-dir -r requirements.txt
+  run_command: ./start.sh
+  environment_slug: python
+  http_port: 8000
+  routes:
+  - path: /api
+  health_check:
+    http_path: /health
+  envs:
+  - key: DATABASE_URL
+    scope: RUN_AND_BUILD_TIME
+    value: ${db.DATABASE_URL}
+  - key: CORS_ORIGINS
+    value: https://erp.cloud9beverages.com
+  - key: ENVIRONMENT
+    value: production
+  - key: DEBUG
+    value: "false"
+  - key: LOG_LEVEL
+    value: INFO
+  - key: JWT_ALGORITHM
+    value: HS256
+  - key: JWT_EXPIRATION_HOURS
+    value: "24"
+  - key: REFRESH_TOKEN_EXPIRATION_DAYS
+    value: "30"
+  - key: JWT_SECRET
+    scope: RUN_TIME
+    value: ${JWT_SECRET}
 
 databases:
-  - name: db
-    engine: PG
-    production: true
-    version: "16"
+- name: db
+  engine: PG
+  production: true
+  version: "16"
 
 domains:
-  - name: erp.cloud9beverages.com
-    type: PRIMARY
-    routes:
-      - path: /
-        service: frontend
-  - name: api.cloud9beverages.com
-    type: ALIAS
-    routes:
-      - path: /
-        service: backend
+- name: erp.cloud9beverages.com
+  type: PRIMARY
+  routes:
+  - path: /
+    service: frontend
+- name: api.cloud9beverages.com
+  type: ALIAS
+  routes:
+  - path: /
+    service: backend

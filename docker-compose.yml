@@ -86,7 +86,8 @@ services:
 
 volumes:
   postgres_data:
-
+  caddy_data:
+  caddy_config:
 networks:
   c9erp-network:
     driver: bridge

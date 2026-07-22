@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, AlertCircle, CheckCircle2, Copy } from 'lucide-react';
+import { API_BASE_URL } from '../../api/client';
 
 interface SerialNumberInputProps {
   itemId?: number;
@@ -56,7 +57,7 @@ export const SerialNumberInput: React.FC<SerialNumberInputProps> = ({
     setError(undefined);
 
     try {
-      const response = await fetch(`/api/inventory/${itemId}/serials/single`, {
+      const response = await fetch(`${API_BASE_URL}/inventory/${itemId}/serials/single`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -119,7 +120,7 @@ export const SerialNumberInput: React.FC<SerialNumberInputProps> = ({
     setError(undefined);
 
     try {
-      const response = await fetch(`/api/inventory/${itemId}/serials/range`, {
+      const response = await fetch(`${API_BASE_URL}/inventory/${itemId}/serials/range`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

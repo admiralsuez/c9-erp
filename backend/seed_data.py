@@ -203,7 +203,7 @@ def seed_vendors():
         ("ABC Traders", "abc traders", "Wholesale", "Rajesh Kumar", "+91-9876-543210", "rajesh@abctraders.com", "Mumbai"),
         ("XYZ Supplies", "xyz supplies", "Supplier", "Priya Singh", "+91-9876-543211", "priya@xyzsupplies.com", "Delhi"),
         ("Global Items Inc", "global items inc", "Wholesaler", "Mike Johnson", "+1-555-1234", "mike@globalitems.com", "USA"),
-    ]
+    ]           
     
     for name, normalized, vendor_type, contact, phone, email, city in vendors_list:
         vendor = db.query(Vendor).filter(Vendor.name_normalized == normalized).first()
@@ -282,14 +282,14 @@ def get_or_create_admin():
         
         admin_user = User(
             full_name="System Administrator",
-            email="admin@localhost",
+            email="admin@localhost.com",
             password_hash=hash_password("admin@123"),
             role_id=admin_role.id,
             department="Administration"
         )
         db.add(admin_user)
         db.commit()
-        print("[+] Initial Admin user created: admin@localhost / admin@123")
+        print("[+] Initial Admin user created: admin@localhost.com / admin@123")
         return True
     else:
         print(f"[✓] Admin user exists: {admin_user.email}")
@@ -332,7 +332,7 @@ def main():
         
         if admin_created:
             print("🔐 FIRST-TIME SETUP - Admin Account Created")
-            print("   Email: admin@localhost")
+            print("   Email: admin@localhost.com")
             print("   Password: admin@123")
             print("\n   ⚠️  IMPORTANT: Change this password in Settings after first login!\n")
         
@@ -341,7 +341,7 @@ def main():
         print("  ├─ Manager: manager@example.com / manager123")
         print("  └─ Warehouse: warehouse@example.com / warehouse123")
         print("\nAdditional Setup Credentials:")
-        print("  └─ Initial Admin: admin@localhost / admin@123")
+        print("  └─ Initial Admin: admin@localhost.com / admin@123")
         print()
         print("Features now available:")
         print("  ✓ Dashboard & Analytics")

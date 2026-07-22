@@ -56,11 +56,15 @@ logger.info(f"Log file: {_log_path}")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- startup ---
-    from alembic.config import Config
-    from alembic import command
-    alembic_cfg = Config("alembic.ini")
-    command.upgrade(alembic_cfg, "head")
-    logger.info("Alembic migrations up to date")
+    # --- Alembic migrations (wrapped to avoid startup crash) ---
+    try:
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Alembic migrations up to date")
+    except Exception as e:
+        logger.warning(f"Alembic migration failed (ignored for dev): {e}")
 
     # Auto-backup: run an immediate backup, then schedule periodic backups
     from app.routers.backup import _backup_db, BACKUP_DIR, _IS_POSTGRES
@@ -114,7 +118,7 @@ app = FastAPI(
 )
 
 # CORS middleware - origins from env var (comma-separated) or defaults
-_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:8000").split(",")
+_cors_origins = os.getenv("CORS_ORIGINS", "http://64.227.191.1:5173,https://64.227.191.1:5173,http://localhost:5173,http://localhost:3000,http://localhost:8000").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -129,52 +133,60 @@ _SENSITIVE_PATHS = ["/auth", "/vendor-portal", "/backup"]
 # Request-logging middleware — logs every API hit (redacts sensitive bodies)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    import asyncio
+    from starlette.datastructures import Headers
+
     start = time.time()
     client = request.client.host if request.client else "unknown"
-    user_agent = request.headers.get("user-agent", "?")
     auth = request.headers.get("authorization", "")
     has_token = "Bearer" in auth if auth else False
 
     skip = request.url.path in ("/favicon.ico", "/health")
-    if not skip:
-        body_snippet = ""
-        if request.method in ("POST", "PUT", "PATCH"):
-            is_sensitive = any(request.url.path.startswith(p) for p in _SENSITIVE_PATHS)
-            if is_sensitive:
-                # Read body for downstream use but do NOT log it
-                try:
-                    raw = await request.body()
-                    request._body = raw
-                except Exception:
-                    pass
-                body_snippet = " BODY=[redacted]"
-            else:
-                try:
-                    raw = await request.body()
-                    if raw:
-                        decoded = raw.decode("utf-8", errors="replace")
-                        if len(decoded) > 3000:
-                            decoded = decoded[:3000] + "…[truncated]"
-                        body_snippet = f" BODY={decoded}"
-                    request._body = raw
-                except Exception:
-                    body_snippet = " BODY=[unreadable]"
+
+    if not skip and request.method in ("POST", "PUT", "PATCH"):
+        # Read the body ONCE and cache it so downstream handlers can still read it
+        try:
+            raw_body = await request.body()
+        except Exception:
+            raw_body = b""
+
+        # Rebuild the ASGI receive stream so FastAPI can read the body again
+        async def _receive():
+            return {"type": "http.request", "body": raw_body, "more_body": False}
+
+        request = Request(request.scope, _receive)
+
+        is_sensitive = any(request.url.path.startswith(p) for p in _SENSITIVE_PATHS)
+        if is_sensitive:
+            body_snippet = " BODY=[redacted]"
+        elif raw_body:
+            decoded = raw_body.decode("utf-8", errors="replace")
+            if len(decoded) > 3000:
+                decoded = decoded[:3000] + "...[truncated]"
+            body_snippet = f" BODY={decoded}"
+        else:
+            body_snippet = ""
 
         logger.info(
             f"IN  | {client} | {request.method} {request.url.path} | "
             f"auth={'yes' if has_token else 'no'}{body_snippet}"
+        )
+    elif not skip:
+        logger.info(
+            f"IN  | {client} | {request.method} {request.url.path} | "
+            f"auth={'yes' if has_token else 'no'}"
         )
 
     response = await call_next(request)
     elapsed_ms = (time.time() - start) * 1000
 
     if not skip:
-        status = response.status_code
-        level = logging.WARNING if status >= 400 else logging.INFO
+        status_code = response.status_code
+        level = logging.WARNING if status_code >= 400 else logging.INFO
         logger.log(
             level,
             f"OUT | {client} | {request.method} {request.url.path} | "
-            f"{status} | {elapsed_ms:.1f}ms"
+            f"{status_code} | {elapsed_ms:.1f}ms"
         )
 
     return response

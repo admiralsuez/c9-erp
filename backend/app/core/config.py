@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     DO_SPACES_ENDPOINT: str = os.getenv("DO_SPACES_ENDPOINT", "https://sfo3.digitaloceanspaces.com")
     DO_SPACES_CDN_URL: str = os.getenv("DO_SPACES_CDN_URL", "")  # Optional CDN URL
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()

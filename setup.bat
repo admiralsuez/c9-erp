@@ -138,7 +138,7 @@ REM Create .env if it doesn't exist
 if not exist "frontend\.env" (
     echo Creating frontend\.env file...
     (
-        echo VITE_API_URL=http://localhost:8000
+        echo VITE_API_URL=http://64.227.191.1:8000
         echo VITE_APP_NAME=C9 ERP
     ) > "frontend\.env"
     echo Created frontend\.env

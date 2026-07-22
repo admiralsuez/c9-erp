@@ -1,71 +1,70 @@
-spec:
-  name: cloud9-erp
+name: cloud9-erp
 
 services:
-- name: frontend
-  github:
-    repo: admiralsuez/c9-erp
-    branch: main
-  source_dir: frontend
-  build_command: npm install && npm run build
-  environment_slug: node-js
-  http_port: 3000
-  routes:
-  - path: /
-  catchall_document: index.html
-  envs:
-  - key: VITE_API_URL
-    value: https://api.cloud9beverages.com
+  - name: frontend
+    github:
+      repo: admiralsuez/c9-erp
+      branch: main
+    source_dir: frontend
+    build_command: npm install && npm run build
+    environment_slug: node-js
+    http_port: 3000
+    routes:
+      - path: /
+    catchall_document: index.html
+    envs:
+      - key: VITE_API_URL
+        value: https://api.cloud9beverages.com
 
-- name: backend
-  github:
-    repo: admiralsuez/c9-erp
-    branch: main
-  source_dir: backend
-  build_command: pip install --no-cache-dir -r requirements.txt
-  run_command: ./start.sh
-  environment_slug: python
-  http_port: 8000
-  routes:
-  - path: /api
-  health_check:
-    http_path: /health
-  envs:
-  - key: DATABASE_URL
-    scope: RUN_AND_BUILD_TIME
-    value: ${db.DATABASE_URL}
-  - key: CORS_ORIGINS
-    value: https://erp.cloud9beverages.com
-  - key: ENVIRONMENT
-    value: production
-  - key: DEBUG
-    value: "false"
-  - key: LOG_LEVEL
-    value: INFO
-  - key: JWT_ALGORITHM
-    value: HS256
-  - key: JWT_EXPIRATION_HOURS
-    value: "24"
-  - key: REFRESH_TOKEN_EXPIRATION_DAYS
-    value: "30"
-  - key: JWT_SECRET
-    scope: RUN_TIME
-    value: ${JWT_SECRET}
+  - name: backend
+    github:
+      repo: admiralsuez/c9-erp
+      branch: main
+    source_dir: backend
+    build_command: pip install --no-cache-dir -r requirements.txt
+    run_command: ./start.sh
+    environment_slug: python
+    http_port: 8000
+    routes:
+      - path: /api
+    health_check:
+      http_path: /health
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${db.DATABASE_URL}
+      - key: CORS_ORIGINS
+        value: https://erp.cloud9beverages.com
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRATION_HOURS
+        value: "24"
+      - key: REFRESH_TOKEN_EXPIRATION_DAYS
+        value: "30"
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        value: ${JWT_SECRET}
 
 databases:
-- name: db
-  engine: PG
-  production: true
-  version: "16"
+  - name: db
+    engine: PG
+    production: true
+    version: "16"
 
 domains:
-- name: erp.cloud9beverages.com
-  type: PRIMARY
-  routes:
-  - path: /
-    service: frontend
-- name: api.cloud9beverages.com
-  type: ALIAS
-  routes:
-  - path: /
-    service: backend
+  - name: erp.cloud9beverages.com
+    type: PRIMARY
+    routes:
+      - path: /
+        service: frontend
+  - name: api.cloud9beverages.com
+    type: ALIAS
+    routes:
+      - path: /
+        service: backend

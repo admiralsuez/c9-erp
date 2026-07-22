@@ -3,7 +3,7 @@ services:
   - name: frontend
     github:
       branch: main
-      repo: your-org/c9-erp
+      repo: admiralsuez/c9-erp
     source_dir: frontend
     build_command: npm install && npm run build
     environment_slug: node-js
@@ -23,7 +23,7 @@ services:
   - name: backend
     github:
       branch: main
-      repo: your-org/c9-erp
+      repo: admiralsuez/c9-erp
     source_dir: backend
     build_command: pip install --no-cache-dir -r requirements.txt
     run_command: ./start.sh

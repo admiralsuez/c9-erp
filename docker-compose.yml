@@ -70,19 +70,19 @@ services:
       - c9erp-network
     environment:
       - VITE_API_URL=http://64.227.191.1:8000
-      
+
   caddy:
-  image: caddy:2
-  container_name: caddy
-  volumes:
-    - ./Caddyfile:/etc/caddy/Caddyfile
-    - caddy_data:/data
-    - caddy_config:/config
-  ports:
-    - "80:80"
-    - "443:443"
-  networks:
-    - c9erp-network   # attach to ERP network
+    image: caddy:2
+    container_name: caddy
+    volumes:
+      - ./apps/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - c9erp-network
 
 volumes:
   postgres_data:

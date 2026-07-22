@@ -14,7 +14,7 @@ services:
     catchall_document: index.html
     envs:
       - key: VITE_API_URL
-        value: https://api.cloud9beverages.com
+        value: https://erp.cloud9beverages.com/api
 
   - name: backend
     github:
@@ -33,8 +33,6 @@ services:
       - key: DATABASE_URL
         scope: RUN_AND_BUILD_TIME
         value: ${db.DATABASE_URL}
-      - key: CORS_ORIGINS
-        value: https://erp.cloud9beverages.com
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
@@ -63,8 +61,5 @@ domains:
     routes:
       - path: /
         service: frontend
-  - name: api.cloud9beverages.com
-    type: ALIAS
-    routes:
-      - path: /
+      - path: /api
         service: backend

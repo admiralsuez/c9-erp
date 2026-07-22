@@ -6,9 +6,22 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "Cloud9 ERP"
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")  # production, staging, development
 
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+
+    # CORS - Allow frontend domain(s)
+    CORS_ORIGINS: list = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://erp.cloud9beverages.com",
+    ]
+    ALLOWED_HOSTS: list = [
+        "localhost",
+        "127.0.0.1",
+        "erp.cloud9beverages.com",
+    ]
 
     # JWT
     JWT_SECRET: str = os.getenv("JWT_SECRET", "")

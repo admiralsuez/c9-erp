@@ -160,7 +160,7 @@ Open https://erp.cloud9beverages.com in your browser. You should see the login p
 ## Step 6: First Login and Configuration
 
 1. **Login** with the admin credentials:
-   - Email: `admin@localhost`
+   - Email: `admin@example.com`
    - Password: `admin@123`
 
 2. **Change the admin password immediately**:

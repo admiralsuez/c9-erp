@@ -109,7 +109,7 @@ def setup_roles_permissions(db):
         db.rollback()
         return False
 
-def create_admin_user(db, email="admin@localhost.com", password="admin@123"):
+def create_admin_user(db, email="admin@example.com", password="admin@123"):
     """Create initial admin user."""
     print("[*] Checking for admin user...")
     

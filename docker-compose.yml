@@ -70,6 +70,8 @@ services:
       - c9erp-network
     environment:
       - VITE_API_URL=http://64.227.191.1:8000
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+
 
   caddy:
     image: caddy:2

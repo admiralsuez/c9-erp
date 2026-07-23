@@ -83,6 +83,7 @@ services:
       - "443:443"
     networks:
       - c9erp-network
+      - proxy
 
 volumes:
   postgres_data:

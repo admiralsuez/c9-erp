@@ -92,3 +92,5 @@ volumes:
 networks:
   c9erp-network:
     driver: bridge
+  proxy:
+    external: true

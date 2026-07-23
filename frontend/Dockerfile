@@ -1,10 +1,11 @@
 # Build stage
-FROM node:20-alpine as builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Accept build-time API URL (defaults to localhost for local dev)
-ARG VITE_API_URL=http://64.227.191.1:8000
+# Accept build-time API URL. Default is the relative /api path (same-origin,
+# reverse-proxied) which works on any domain without rebuilding.
+ARG VITE_API_URL=/api
 ENV VITE_API_URL=$VITE_API_URL
 
 # Copy package files
@@ -20,18 +21,18 @@ COPY . .
 RUN npm run build
 
 # Production stage
-from node:20-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Install a simple HTTP server to serve static files
-RUN npm install -g http-server
+# 'serve -s' provides SPA fallback (deep links like /settings serve index.html)
+RUN npm install -g serve
 
 # Copy built assets from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Expose port
-EXPOSE 5173
+# Expose port (must match docker-compose and nginx upstream)
+EXPOSE 3000
 
-# Serve the application
-CMD ["http-server", "dist", "-p", "5173", "--cors"]
+# Serve the application in SPA mode
+CMD ["serve", "-s", "dist", "-l", "3000"]

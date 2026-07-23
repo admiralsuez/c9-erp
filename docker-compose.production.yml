@@ -36,13 +36,16 @@ services:
       JWT_EXPIRATION_HOURS: "24"
       REFRESH_TOKEN_EXPIRATION_DAYS: "30"
       CORS_ORIGINS: "https://erp.cloud9beverages.com"
+    # Bind to localhost only - nginx is the public entrypoint
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      - ./backend:/app
+      - backend_uploads:/app/static/uploads
+      - backend_backups:/app/backups
+      - backend_logs:/app/logs
     restart: unless-stopped
     networks:
       - cloud9-network
@@ -58,12 +61,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: https://erp.cloud9beverages.com/api
+        # Relative path: requests go to the same origin (erp.cloud9beverages.com)
+        # and nginx forwards /api/* to the backend. No mixed content, no CORS.
+        VITE_API_URL: /api
     container_name: cloud9-frontend
-    environment:
-      VITE_API_URL: https://erp.cloud9beverages.com/api
+    # Bind to localhost only - nginx is the public entrypoint
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - backend
     restart: unless-stopped
@@ -72,6 +76,12 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  backend_uploads:
+    driver: local
+  backend_backups:
+    driver: local
+  backend_logs:
     driver: local
 
 networks:

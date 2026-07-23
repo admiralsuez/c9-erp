@@ -1,37 +1,50 @@
+# DigitalOcean App Platform spec - single domain: erp.cloud9beverages.com
+#   /      -> frontend (static site, SPA catchall)
+#   /api/* -> backend  (App Platform strips the /api prefix by default,
+#                       so the backend receives /settings, /auth, ...)
+# The frontend is built with VITE_API_URL=/api (relative, same-origin),
+# so there is no mixed content and no CORS in production.
 name: cloud9-erp
 
-services:
+static_sites:
   - name: frontend
     github:
       repo: admiralsuez/c9-erp
       branch: main
+      deploy_on_push: true
     source_dir: frontend
-    build_command: npm install && npm run build
-    environment_slug: node-js
-    http_port: 3000
+    build_command: npm ci && npm run build
+    output_dir: dist
+    catchall_document: index.html
     routes:
       - path: /
-    catchall_document: index.html
     envs:
       - key: VITE_API_URL
-        value: https://erp.cloud9beverages.com/api
+        scope: BUILD_TIME
+        value: /api
 
+services:
   - name: backend
     github:
       repo: admiralsuez/c9-erp
       branch: main
+      deploy_on_push: true
     source_dir: backend
-    build_command: pip install --no-cache-dir -r requirements.txt
-    run_command: ./start.sh
-    environment_slug: python
+    dockerfile_path: backend/Dockerfile
     http_port: 8000
+    instance_size_slug: basic-xxs
+    instance_count: 1
     routes:
       - path: /api
+      # Backend serves uploaded files at /static/... - keep the prefix intact
+      - path: /static
+        preserve_path_prefix: true
     health_check:
       http_path: /health
+      initial_delay_seconds: 30
     envs:
       - key: DATABASE_URL
-        scope: RUN_AND_BUILD_TIME
+        scope: RUN_TIME
         value: ${db.DATABASE_URL}
       - key: ENVIRONMENT
         value: production
@@ -45,9 +58,11 @@ services:
         value: "24"
       - key: REFRESH_TOKEN_EXPIRATION_DAYS
         value: "30"
+      - key: CORS_ORIGINS
+        value: https://erp.cloud9beverages.com
       - key: JWT_SECRET
         scope: RUN_TIME
-        value: ${JWT_SECRET}
+        type: SECRET
 
 databases:
   - name: db
@@ -56,10 +71,5 @@ databases:
     version: "16"
 
 domains:
-  - name: erp.cloud9beverages.com
+  - domain: erp.cloud9beverages.com
     type: PRIMARY
-    routes:
-      - path: /
-        service: frontend
-      - path: /api
-        service: backend

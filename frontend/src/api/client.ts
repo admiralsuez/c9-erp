@@ -2,20 +2,13 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const getApiBaseUrl = (): string => {
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl && envUrl !== '/api') {
-    return envUrl;
-  }
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const protocol = window.location.protocol;
-    return `${protocol}//${hostname}:8000`;
-  }
-  return 'http://localhost:8000';
-};
-
-export const API_BASE_URL = getApiBaseUrl();
+// API base URL strategy:
+// - Default: relative '/api' (same origin as the page - no mixed content, no CORS).
+//   The reverse proxy (nginx / DO App Platform / Vite dev proxy) strips '/api'
+//   and forwards to the backend.
+// - Override: set VITE_API_URL at build time only if the API lives on another origin.
+//   It must then be an https:// URL when the site is served over https.
+export const API_BASE_URL: string = import.meta.env.VITE_API_URL || '/api';
 
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({

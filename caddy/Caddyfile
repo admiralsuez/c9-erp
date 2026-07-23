@@ -1,0 +1,43 @@
+# Cloud9 ERP - Caddyfile
+# Caddy automatically provisions and renews Let's Encrypt certificates
+# for the domain below. Requirements:
+#   - DNS A record: erp.cloud9beverages.com -> your droplet IP
+#   - Ports 80 and 443 open (ufw allow 80,443/tcp)
+#
+# Routing (single domain, same-origin - no mixed content, no CORS):
+#   /api/*    -> backend  (strips /api; backend routes are unprefixed)
+#   /static/* -> backend  (uploaded files served by FastAPI)
+#   /health   -> backend  (health check)
+#   /*        -> frontend (SPA)
+
+erp.cloud9beverages.com {
+	encode gzip
+
+	# API - strip the /api prefix, backend receives /auth, /settings, ...
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Uploaded files (FastAPI StaticFiles at /static)
+	handle /static/* {
+		reverse_proxy api:8000
+	}
+
+	# Health check
+	handle /health {
+		reverse_proxy api:8000
+	}
+
+	# Frontend SPA (the 'serve -s' container handles index.html fallback)
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	# Security headers
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "no-referrer-when-downgrade"
+	}
+}

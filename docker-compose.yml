@@ -34,18 +34,18 @@ services:
       DEBUG: ${DEBUG:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ENVIRONMENT: ${ENVIRONMENT:-development}
+    # Localhost-only bind: Caddy is the public entrypoint
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      - ./backend:/app
-      - ./backend/logs:/app/logs
-      - ./backend/uploads:/app/uploads
-    command: >
-      sh -c "python setup_firstrun.py &&
-             python -m uvicorn main:app --host 0.0.0.0 --port 8000"
+      - backend_logs:/app/logs
+      - backend_uploads:/app/static/uploads
+      - backend_backups:/app/backups
+    # Uses the image's start.sh: waits for DB, runs setup_firstrun.py
+    # (non-blocking on failure), then starts uvicorn - no restart loops.
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -60,27 +60,35 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Relative path baked into the JS bundle at BUILD time (runtime env
+        # has no effect on Vite). Same-origin /api -> no mixed content.
+        VITE_API_URL: /api
     container_name: erp_frontend
+    # Localhost-only bind: Caddy is the public entrypoint (container serves on 3000)
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - api
     restart: unless-stopped
     networks:
       - c9erp-network
-    environment:
-      - VITE_API_URL=http://64.227.191.1:8000
 
   caddy:
     image: caddy:2
     container_name: caddy
     volumes:
-      - /root/apps/caddy/Caddyfile:/etc/caddy/Caddyfile
+      # Caddyfile ships with the repo (caddy/Caddyfile) - no host-specific paths
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     ports:
       - "80:80"
       - "443:443"
+    depends_on:
+      - frontend
+      - api
+    restart: unless-stopped
     networks:
       - c9erp-network
 
@@ -88,6 +96,9 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  backend_logs:
+  backend_uploads:
+  backend_backups:
 networks:
   c9erp-network:
     driver: bridge

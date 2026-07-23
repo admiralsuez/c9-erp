@@ -69,7 +69,7 @@ services:
     networks:
       - c9erp-network
     environment:
-      - VITE_API_URL=http://64.227.191.1:8000
+      - VITE_API_URL=/api
 
   caddy:
     image: caddy:2

@@ -11,17 +11,9 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
-    # CORS - Allow frontend domain(s)
-    CORS_ORIGINS: list = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://erp.cloud9beverages.com",
-    ]
-    ALLOWED_HOSTS: list = [
-        "localhost",
-        "127.0.0.1",
-        "erp.cloud9beverages.com",
-    ]
+    # CORS - Allow frontend domain(s) (comma-separated string or JSON array)
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,https://erp.cloud9beverages.com"
+    ALLOWED_HOSTS: str = "localhost,127.0.0.1,erp.cloud9beverages.com"
 
     # JWT
     JWT_SECRET: str = os.getenv("JWT_SECRET", "")

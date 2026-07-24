@@ -117,15 +117,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware - origins from env var (comma-separated) or localhost defaults.
+# CORS middleware - origins from env var (comma-separated string) or defaults.
 # NOTE: in production the frontend calls the API via a same-origin /api path
 # (reverse-proxied), so CORS is only relevant for local dev and explicit overrides.
 _cors_origins = [
     o.strip()
-    for o in os.getenv(
-        "CORS_ORIGINS",
-        "http://localhost:5173,http://localhost:3000,http://localhost:8000",
-    ).split(",")
+    for o in settings.CORS_ORIGINS.split(",")
     if o.strip()
 ]
 app.add_middleware(

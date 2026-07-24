@@ -32,7 +32,7 @@ RUN npm install -g serve
 COPY --from=builder /app/dist ./dist
 
 # Expose port (must match docker-compose and nginx upstream)
-EXPOSE 3000
+EXPOSE 5173
 
 # Serve the application in SPA mode
-CMD ["serve", "-s", "dist", "-l", "3000"]
+CMD ["serve", "-s", "dist", "-l", "5173"]

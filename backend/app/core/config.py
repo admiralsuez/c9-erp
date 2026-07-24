@@ -1,5 +1,8 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import json
 import os
+from typing import List, Union
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -11,9 +14,34 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
-    # CORS - Allow frontend domain(s) (comma-separated string or JSON array)
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,https://erp.cloud9beverages.com"
-    ALLOWED_HOSTS: str = "localhost,127.0.0.1,erp.cloud9beverages.com"
+    # CORS - Allow frontend domain(s)
+    CORS_ORIGINS: Union[List[str], str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://erp.cloud9beverages.com",
+    ]
+    ALLOWED_HOSTS: Union[List[str], str] = [
+        "localhost",
+        "127.0.0.1",
+        "erp.cloud9beverages.com",
+    ]
+
+    @field_validator("CORS_ORIGINS", "ALLOWED_HOSTS", mode="before")
+    @classmethod
+    def parse_list(cls, v: Union[List[str], str, None]) -> List[str]:
+        if v is None:
+            return []
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return []
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    return json.loads(v)
+                except Exception:
+                    pass
+            return [item.strip().strip("'\"") for item in v.split(",") if item.strip()]
+        return v
 
     # JWT
     JWT_SECRET: str = os.getenv("JWT_SECRET", "")

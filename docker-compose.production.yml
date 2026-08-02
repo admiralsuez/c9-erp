@@ -39,7 +39,7 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-erp.cloud9beverages.com,localhost,127.0.0.1}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@cloud9.local}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-Admin@12345}
-    # Bind to localhost only - nginx is the public entrypoint
+    # Bind to localhost only - caddy is the public entrypoint
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -65,10 +65,10 @@ services:
       dockerfile: Dockerfile
       args:
         # Relative path: requests go to the same origin (erp.cloud9beverages.com)
-        # and nginx forwards /api/* to the backend. No mixed content, no CORS.
+        # and caddy reverse-proxies /api/* to backend. No mixed content, no CORS.
         VITE_API_URL: /api
     container_name: cloud9-frontend
-    # Bind to localhost only - nginx is the public entrypoint
+    # Bind to localhost only - caddy is the public entrypoint
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
@@ -76,6 +76,23 @@ services:
     restart: unless-stopped
     networks:
       - cloud9-network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: cloud9-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - cloud9-network
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
 
 volumes:
   postgres_data:
@@ -85,6 +102,10 @@ volumes:
   backend_backups:
     driver: local
   backend_logs:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
     driver: local
 
 networks:

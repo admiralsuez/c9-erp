@@ -2,8 +2,10 @@
 
 WORKDIR /app
 
-# Install netcat for database readiness check
-RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
+# Install deployment/runtime utilities for readiness checks and healthchecks
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl netcat-openbsd postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

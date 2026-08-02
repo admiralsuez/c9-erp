@@ -109,9 +109,11 @@ def setup_roles_permissions(db):
         db.rollback()
         return False
 
-def create_admin_user(db, email="admin@example.com", password="admin@123"):
+def create_admin_user(db, email=None, password=None):
     """Create initial admin user."""
     print("[*] Checking for admin user...")
+    email = email or os.getenv("INITIAL_ADMIN_EMAIL", "admin@cloud9.local")
+    password = password or os.getenv("INITIAL_ADMIN_PASSWORD", "Admin@12345")
     
     try:
         # Check if admin already exists
@@ -197,7 +199,7 @@ def main():
             success = False
             raise Exception("Failed to setup roles and permissions")
         
-        # Step 3: Create admin user
+        # Step 3: Create admin user (uses INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD if set)
         admin_email, admin_password, admin_created = create_admin_user(db)
         if admin_email is None:
             success = False
@@ -221,12 +223,17 @@ def main():
             print("   2. Go to Settings → Users to create additional accounts")
             print("   3. Set up your company details in Settings → Company Profile")
             print("   4. Create your warehouse structure in Settings → Warehouse")
-            print("\n📋 NEXT STEPS:\n")
+            print("\n📋 NEXT STEPS (Local Dev):\n")
             print("   1. Start the backend: python main.py")
             print("   2. Start the frontend: npm run dev")
             print("   3. Navigate to http://localhost:5173")
             print("   4. Login with the credentials above")
             print("   5. Update company information and warehouse structure")
+            print("\n📋 NEXT STEPS (DigitalOcean):\n")
+            print("   1. Access https://erp.cloud9beverages.com")
+            print("   2. Login with the credentials above")
+            print("   3. IMPORTANT: Change password immediately")
+            print("   4. Configure company profile and warehouse structure")
         else:
             print(" ✓ Setup verification completed")
             print("="*70)

@@ -1,9 +1,11 @@
 #!/bin/sh
 # Cloud9 ERP - Reliable startup script
-# Waits for database, attempts admin setup, then starts the API server.
-# Does NOT block on setup failure — logs a warning but continues to start uvicorn.
+# Validates env, waits for database, runs first-run admin setup, then starts the API server.
+# Setup failures are blocking in production so bad deployments fail visibly.
 
 set -e
+echo "[*] Validating production environment..."
+python validate_env.py
 
 # Extract host from DATABASE_URL
 # Supports postgresql://user:pass@host:port/db and postgresql+asyncpg://...
@@ -36,12 +38,13 @@ if [ $attempt -gt $max_attempts ]; then
     exit 1
 fi
 
-# Run admin setup (non-blocking; logs failure but continues)
+# Run admin setup (blocking in production; first-run setup must succeed before serving traffic)
 echo "[*] Running first-run setup (admin user, roles, permissions)..."
 if python setup_firstrun.py; then
     echo "[✓] First-run setup completed successfully"
 else
-    echo "[⚠] First-run setup failed or skipped (admin may already exist). Continuing to start API..."
+    echo "[✗] First-run setup failed."
+    exit 1
 fi
 
 # Start the API server

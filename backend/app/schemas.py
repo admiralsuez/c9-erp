@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pydantic import BaseModel, EmailStr, ConfigDict, computed_field, field_validator
+from pydantic import BaseModel, EmailStr, ConfigDict, computed_field, field_validator, Field
 from datetime import datetime
 from typing import Optional, List
 

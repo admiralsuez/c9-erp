@@ -1,8 +1,11 @@
 # Cloud9 ERP - Caddyfile
 # Caddy automatically provisions and renews Let's Encrypt certificates
 # for the domain below. Requirements:
-#   - DNS A record: erp.cloud9beverages.com -> your droplet IP
+#   - DNS A record: your domain -> your droplet IP
 #   - Ports 80 and 443 open (ufw allow 80,443/tcp)
+#
+# The domain comes from the DOMAIN variable in .env (passed through by
+# docker-compose.production.yml). Default: erp.thecloud9corp.com
 #
 # Routing (single domain, same-origin - no mixed content, no CORS):
 #   /api/*    -> backend  (strips /api; backend routes are unprefixed)
@@ -10,22 +13,22 @@
 #   /health   -> backend  (health check)
 #   /*        -> frontend (SPA)
 
-erp.cloud9beverages.com {
+{$DOMAIN:erp.thecloud9corp.com} {
 	encode gzip
 
 	# API - strip the /api prefix, backend receives /auth, /settings, ...
 	handle_path /api/* {
-		reverse_proxy api:8000
+		reverse_proxy backend:8000
 	}
 
 	# Uploaded files (FastAPI StaticFiles at /static)
 	handle /static/* {
-		reverse_proxy api:8000
+		reverse_proxy backend:8000
 	}
 
 	# Health check
 	handle /health {
-		reverse_proxy api:8000
+		reverse_proxy backend:8000
 	}
 
 	# Frontend SPA (the 'serve -s' container handles index.html fallback)

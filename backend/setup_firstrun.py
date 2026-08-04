@@ -230,7 +230,7 @@ def main():
             print("   4. Login with the credentials above")
             print("   5. Update company information and warehouse structure")
             print("\n📋 NEXT STEPS (DigitalOcean):\n")
-            print("   1. Access https://erp.cloud9beverages.com")
+            print("   1. Access your deployed site (e.g. https://erp.thecloud9corp.com)")
             print("   2. Login with the credentials above")
             print("   3. IMPORTANT: Change password immediately")
             print("   4. Configure company profile and warehouse structure")

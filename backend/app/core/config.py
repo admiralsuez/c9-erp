@@ -18,12 +18,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",
         "http://localhost:5173",
-        "https://erp.cloud9beverages.com",
+        "https://erp.thecloud9corp.com",
     ]
     ALLOWED_HOSTS: Union[List[str], str] = [
         "localhost",
         "127.0.0.1",
-        "erp.cloud9beverages.com",
+        "erp.thecloud9corp.com",
     ]
 
     @field_validator("CORS_ORIGINS", "ALLOWED_HOSTS", mode="before")

@@ -66,9 +66,7 @@ services:
         # caddy reverse-proxies /api/* to backend. No mixed content, no CORS.
         VITE_API_URL: /api
     container_name: cloud9-frontend
-    # Bind to localhost only - caddy is the public entrypoint
-    ports:
-      - "127.0.0.1:3000:3000"
+    # No port binding needed - Caddy accesses via internal network
     depends_on:
       - backend
     restart: unless-stopped

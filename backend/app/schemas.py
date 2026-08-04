@@ -91,15 +91,20 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8, description="Password must be at least 8 characters")
+
+
+class PasswordResetResponse(BaseModel):
+    message: str
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    user: Optional[UserResponse] = None
-
-
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str
 
 
 # ============ SETTINGS ============
@@ -273,6 +278,7 @@ class InventoryItemBase(BaseModel):
 
 class InventoryItemCreate(InventoryItemBase):
     current_quantity: float = 0
+    is_draft: bool = False  # Save as draft instead of publishing immediately
 
 
 class InventoryItemChildCreate(BaseModel):
@@ -327,6 +333,7 @@ class InventoryItemResponse(InventoryItemBase):
     reserved_quantity: float
     is_active: bool
     is_container: bool = False
+    is_draft: bool = False
     created_at: datetime
     updated_at: datetime
     children: List['InventoryItemResponse'] = []

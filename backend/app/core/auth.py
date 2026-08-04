@@ -7,7 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import User, RefreshToken
+from app.models import User, RefreshToken, PasswordResetToken
 import hashlib
 import secrets as _secrets
 
@@ -134,3 +134,58 @@ def require_roles(*roles: str):
         return current_user
     
     return role_checker
+
+
+def create_password_reset_token(user_id: int, db: Session) -> str:
+    """Create a password reset token with expiration."""
+    token = _secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)  # 1 hour expiration
+    
+    reset_token = PasswordResetToken(
+        user_id=user_id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        used=False
+    )
+    db.add(reset_token)
+    db.commit()
+    
+    return token
+
+
+def verify_password_reset_token(token: str, db: Session) -> Optional[int]:
+    """Verify a password reset token and return user_id if valid.
+    
+    Returns:
+        user_id if token is valid and not used, None otherwise
+    """
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    
+    reset_token = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token_hash == token_hash,
+        PasswordResetToken.used == False,
+        PasswordResetToken.expires_at > datetime.now(timezone.utc)
+    ).first()
+    
+    if not reset_token:
+        return None
+    
+    return reset_token.user_id
+
+
+def mark_password_reset_token_used(token: str, db: Session) -> bool:
+    """Mark a password reset token as used."""
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    
+    reset_token = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token_hash == token_hash
+    ).first()
+    
+    if reset_token:
+        reset_token.used = True
+        reset_token.used_at = datetime.now(timezone.utc)
+        db.commit()
+        return True
+    
+    return False

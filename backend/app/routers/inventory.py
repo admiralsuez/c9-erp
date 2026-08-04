@@ -223,6 +223,82 @@ def list_items(
     }
 
 
+@router.get("/drafts")
+def list_drafts(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    search: str = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List draft inventory items (unpublished)."""
+    query = db.query(InventoryItem).filter(
+        InventoryItem.is_draft == True,
+        InventoryItem.deleted_at == None
+    )
+    
+    # Search by name, SKU, or barcode
+    if search:
+        query = query.filter(
+            or_(
+                InventoryItem.name.ilike(f"%{search}%"),
+                InventoryItem.sku.ilike(f"%{search}%"),
+                InventoryItem.barcode.ilike(f"%{search}%")
+            )
+        )
+    
+    total = query.count()
+    skip = (page - 1) * size
+    items = query.offset(skip).limit(size).all()
+    total_pages = (total + size - 1) // size
+    
+    items_data = []
+    for item in items:
+        try:
+            items_data.append(InventoryItemResponse.model_validate(item))
+        except Exception as e:
+            logger.error(f"Error validating draft item {item.id}: {e}")
+            continue
+    
+    return {
+        "items": items_data,
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": total_pages
+    }
+
+
+@router.post("/items/{item_id}/publish", response_model=InventoryItemResponse)
+def publish_draft(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.create"))
+):
+    """Publish a draft item (mark as non-draft)."""
+    item = db.query(InventoryItem).filter(
+        InventoryItem.id == item_id,
+        InventoryItem.is_draft == True,
+        InventoryItem.deleted_at == None
+    ).first()
+    
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Draft item not found"
+        )
+    
+    item.is_draft = False
+    db.commit()
+    db.refresh(item)
+    
+    logger.info(f"Published draft item({item.id}) {item.sku} by {current_user.email}")
+    log_audit(db, user_id=current_user.id, action="publish_draft", 
+              entity_type="inventory_item", entity_id=item.id)
+    
+    return item
+
+
 @router.post("/items", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)
 def create_item(
     item_data: InventoryItemCreate,
@@ -319,7 +395,8 @@ def create_item(
             bin_id=item_data.bin_id,
             description=item_data.description,
             image_url=item_data.image_url,
-            is_container=is_container
+            is_container=is_container,
+            is_draft=item_data.is_draft  # Save as draft if requested
         )
         db.add(item)
         db.flush()  # Get the item ID before creating transaction

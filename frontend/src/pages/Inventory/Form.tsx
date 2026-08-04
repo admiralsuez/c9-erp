@@ -216,11 +216,21 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Input
-                  {...register('sku')}
+                  {...register('sku', {
+                    onChange: (e) => {
+                      e.target.value = e.target.value.replace(/ +/g, '-');
+                    },
+                  })}
                   label="SKU (Stock Keeping Unit)"
                   placeholder="e.g., OFC-001"
                   error={errors.sku?.message as string}
                   disabled={isPending}
+                  onKeyUp={(e) => {
+                    const input = e.target as HTMLInputElement;
+                    if (input.value.includes(' ')) {
+                      input.value = input.value.replace(/ +/g, '-');
+                    }
+                  }}
                 />
               </div>
               <div>
@@ -384,7 +394,16 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
                         <input
                           type="text"
                           value={child.sku}
-                          onChange={(e) => updateChild(idx, 'sku', e.target.value)}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/ +/g, '-');
+                            updateChild(idx, 'sku', value);
+                          }}
+                          onKeyUp={(e) => {
+                            const input = e.target as HTMLInputElement;
+                            if (input.value.includes(' ')) {
+                              input.value = input.value.replace(/ +/g, '-');
+                            }
+                          }}
                           placeholder="e.g., VC-360L"
                           className="form-input text-sm"
                           disabled={isBatchPending}

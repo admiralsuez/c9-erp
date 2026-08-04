@@ -223,6 +223,32 @@ DEFAULT_EMAIL_TEMPLATES = {
 </body>
 </html>
         """
+    },
+    "password_reset": {
+        "subject": "Reset Your Cloud9 ERP Password",
+        "body_html": """
+<html>
+<body style="font-family: Arial, sans-serif; color: #333;">
+    <h2>Password Reset Request</h2>
+    <p>Hello {{ user_name }},</p>
+    
+    <p>We received a request to reset the password for your Cloud9 ERP account. If you did not make this request, you can ignore this email.</p>
+    
+    <p>To reset your password, click the link below (this link will expire in 1 hour):</p>
+    
+    <p style="margin: 20px 0;">
+        <a href="{{ reset_link }}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Reset Password</a>
+    </p>
+    
+    <p>Or copy and paste this link in your browser:</p>
+    <p style="word-break: break-all; background-color: #f5f5f5; padding: 10px;">{{ reset_link }}</p>
+    
+    <hr style="border: none; border-top: 1px solid #ddd; margin-top: 30px;">
+    <p style="font-size: 12px; color: #666;">This is an automated email. Please do not reply directly. If you need assistance, contact support@thecloud9corp.com.</p>
+    <p style="font-size: 12px; color: #666;">© 2024 Cloud9 ERP. All rights reserved.</p>
+</body>
+</html>
+        """
     }
 }
 

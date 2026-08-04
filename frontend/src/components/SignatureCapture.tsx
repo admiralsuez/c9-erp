@@ -213,7 +213,7 @@ export const SignatureCapture: React.FC<SignatureCaptureProps> = ({
         onPointerMove={draw}
         onPointerUp={stopDrawing}
         onPointerLeave={stopDrawing}
-        className={`border-2 border-dashed border-neutral-300 rounded-lg bg w-full touch-none ${
+        className={`border-2 border-dashed border-neutral-300 rounded-lg bg-white w-full touch-none ${
           disabled || mode === 'view' ? 'cursor-default' : 'cursor-crosshair'
         }`}
         style={{ maxWidth: '100%', height: 'auto' }}

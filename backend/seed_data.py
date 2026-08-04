@@ -88,6 +88,11 @@ def seed_users():
     manager_role = db.query(Role).filter(Role.name == "Manager").first()
     warehouse_role = db.query(Role).filter(Role.name == "Warehouse User").first()
     
+    # Ensure roles exist before creating users
+    if not admin_role or not manager_role or not warehouse_role:
+        print("[-] Error: Roles not found. Run seed_roles_and_permissions() first.")
+        return
+    
     users_list = [
         ("Admin User", "admin@example.com", "admin@123", admin_role.id, "Admin"),
         ("John Manager", "manager@example.com", "manager123", manager_role.id, "Operations"),

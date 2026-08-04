@@ -4,11 +4,16 @@ from datetime import datetime, timezone, timedelta
 from app.core.database import get_db
 from app.core.auth import (
     hash_password, verify_password, create_access_token,
-    create_refresh_token, verify_token, get_current_user
+    create_refresh_token, verify_token, get_current_user,
+    create_password_reset_token, verify_password_reset_token, mark_password_reset_token_used
 )
 from app.models import User, RefreshToken
+from app.schemas import PasswordResetRequest, PasswordResetConfirm, PasswordResetResponse
 from app.services.audit_service import log_audit
 from app.schemas import LoginRequest, TokenResponse, RefreshTokenRequest, UserResponse
+from app.services.email_service import get_email_service
+from app.services.email_templates import DEFAULT_EMAIL_TEMPLATES
+from app.core.config import settings
 from collections import defaultdict
 import hashlib
 import time
@@ -184,3 +189,108 @@ async def logout(current_user: User = Depends(get_current_user), db: Session = D
     db.commit()
     
     return {"message": "Logged out successfully"}
+
+
+@router.post("/request-password-reset")
+def request_password_reset(
+    request: PasswordResetRequest,
+    http_request: Request,
+    db: Session = Depends(get_db)
+):
+    """Request a password reset token via email."""
+    ip = http_request.client.host if http_request.client else "unknown"
+    
+    # Find user by email
+    user = db.query(User).filter(
+        User.email == request.email,
+        User.is_active == True,
+        User.deleted_at == None
+    ).first()
+    
+    if not user:
+        # For security, don't reveal if email exists
+        logger.info("PASSWORD RESET requested for unknown email: %s from %s", request.email, ip)
+        return {"message": "If email exists, a password reset link will be sent"}
+    
+    # Create reset token
+    reset_token = create_password_reset_token(user.id, db)
+    
+    # Build reset link (frontend will handle the reset)
+    reset_link = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+    
+    # Send email with reset link
+    email_service = get_email_service()
+    template = DEFAULT_EMAIL_TEMPLATES["password_reset"]
+    
+    success = email_service.send_templated_email(
+        to_email=user.email,
+        template=template,
+        context={
+            "user_name": user.full_name or user.email.split('@')[0],
+            "reset_link": reset_link
+        }
+    )
+    
+    if success:
+        logger.info("PASSWORD RESET email sent to %s from %s", user.email, ip)
+        log_audit(db, user_id=user.id, action="password_reset_requested", 
+                  entity_type="user", entity_id=user.id, ip_address=ip)
+    else:
+        logger.error("PASSWORD RESET email failed for %s from %s", user.email, ip)
+    
+    return {"message": "If email exists, a password reset link will be sent"}
+
+
+@router.post("/reset-password", response_model=PasswordResetResponse)
+def reset_password(
+    request: PasswordResetConfirm,
+    http_request: Request,
+    db: Session = Depends(get_db)
+):
+    """Reset password using a valid reset token."""
+    ip = http_request.client.host if http_request.client else "unknown"
+    
+    # Verify the reset token
+    user_id = verify_password_reset_token(request.token, db)
+    
+    if not user_id:
+        logger.warning("PASSWORD RESET with invalid/expired token from %s", ip)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset link"
+        )
+    
+    # Find user
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.is_active == True,
+        User.deleted_at == None
+    ).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not found"
+        )
+    
+    # Update password
+    user.password_hash = hash_password(request.new_password)
+    db.commit()
+    
+    # Mark token as used
+    mark_password_reset_token_used(request.token, db)
+    
+    # Create new access tokens for automatic login
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id, db)
+    
+    logger.info("PASSWORD RESET successful for %s from %s", user.email, ip)
+    log_audit(db, user_id=user.id, action="password_reset_completed", 
+              entity_type="user", entity_id=user.id, ip_address=ip)
+    
+    return {
+        "message": "Password reset successful. You are now logged in.",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }

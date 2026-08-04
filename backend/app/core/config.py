@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Cloud9 ERP"
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")  # production, staging, development
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "https://erp.thecloud9corp.com")  # Frontend base URL for reset links
 
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")

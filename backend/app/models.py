@@ -92,6 +92,25 @@ class RefreshToken(Base):
     user = relationship("User", back_populates="refresh_tokens")
 
 
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String(255), nullable=False, unique=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    used_at = Column(DateTime(timezone=True))
+    
+    user = relationship("User")
+    
+    __table_args__ = (
+        Index("idx_password_reset_token_hash", "token_hash"),
+        Index("idx_password_reset_user_id", "user_id"),
+    )
+
+
 class UserSignature(Base):
     __tablename__ = "user_signatures"
     
@@ -237,6 +256,7 @@ class InventoryItem(Base):
     description = Column(Text)
     image_url = Column(String(500))
     is_container = Column(Boolean, default=False, nullable=False)
+    is_draft = Column(Boolean, default=False, nullable=False)  # Draft status for unpublished items
     is_active = Column(Boolean, default=True, nullable=False)
     deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
@@ -257,6 +277,7 @@ class InventoryItem(Base):
         Index("idx_inventory_category", "category_id"),
         Index("idx_inventory_parent", "parent_id"),
         Index("idx_inventory_deleted_at", "deleted_at"),
+        Index("idx_inventory_is_draft", "is_draft"),
         Index("idx_inventory_low_stock", "current_quantity", "minimum_quantity"),
     )
 

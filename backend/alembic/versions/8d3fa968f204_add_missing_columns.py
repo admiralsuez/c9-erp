@@ -43,13 +43,9 @@ def upgrade() -> None:
     if not _has_column("notifications", "actor_id"):
         op.add_column("notifications", sa.Column("actor_id", sa.Integer(), sa.ForeignKey("users.id")))
 
-    # deleted_at indexes — SQLite doesn't support CREATE INDEX IF NOT EXISTS
-    if dialect == "postgresql":
-        op.create_index("idx_inventory_deleted_at", "inventory_items", ["deleted_at"], unique=False, postgresql_if_not_exists=True)
-        op.create_index("idx_orders_deleted_at", "orders", ["deleted_at"], unique=False, postgresql_if_not_exists=True)
-    else:
-        op.execute(text("CREATE INDEX IF NOT EXISTS idx_inventory_deleted_at ON inventory_items(deleted_at)"))
-        op.execute(text("CREATE INDEX IF NOT EXISTS idx_orders_deleted_at ON orders(deleted_at)"))
+    # deleted_at indexes — use raw SQL for all dialects
+    op.execute(text("CREATE INDEX IF NOT EXISTS idx_inventory_deleted_at ON inventory_items(deleted_at)"))
+    op.execute(text("CREATE INDEX IF NOT EXISTS idx_orders_deleted_at ON orders(deleted_at)"))
 
 
 def downgrade() -> None:

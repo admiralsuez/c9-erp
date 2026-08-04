@@ -17,11 +17,19 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_column(table: str, column: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    cols = [c["name"] for c in inspector.get_columns(table)]
+    return column in cols
+
+
 def upgrade() -> None:
-    op.add_column(
-        "vendors",
-        sa.Column("pincode", sa.String(10), nullable=True)
-    )
+    if not _has_column("vendors", "pincode"):
+        op.add_column(
+            "vendors",
+            sa.Column("pincode", sa.String(10), nullable=True)
+        )
 
 
 def downgrade() -> None:

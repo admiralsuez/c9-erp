@@ -1,0 +1,55 @@
+# This is the Caddyfile to place at /apps/caddy/Caddyfile
+# It includes all projects: n8n, ntfy, openclaw, shakshuka, AND Cloud9 ERP
+
+n8.thecoreteam.in {
+    reverse_proxy n8n:5678
+}
+
+ntfy.thecoreteam.in {
+    reverse_proxy ntfy:80
+}
+
+claw.thecoreteam.in {
+    basic_auth {
+        vibin $2a$14$LaOax7hWfJPaDBZe0oGPLeaM4JRooeak91DhXDS1xKqBlSf6sixZ.
+    }
+
+    reverse_proxy openclaw-gateway:18789
+}
+
+shakshuka.birbot.tech {
+    reverse_proxy 172.17.0.1:3000
+}
+
+# Cloud9 ERP
+erp.thecloud9corp.com {
+    encode gzip
+
+    # API - strip the /api prefix, backend receives /auth, /settings, ...
+    handle_path /api/* {
+        reverse_proxy erp_api:8000
+    }
+
+    # Uploaded files (FastAPI StaticFiles at /static)
+    handle /static/* {
+        reverse_proxy erp_api:8000
+    }
+
+    # Health check
+    handle /health {
+        reverse_proxy erp_api:8000
+    }
+
+    # Frontend SPA
+    handle {
+        reverse_proxy erp_frontend:5173
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+}

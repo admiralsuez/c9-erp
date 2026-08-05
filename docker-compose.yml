@@ -71,28 +71,8 @@ services:
     environment:
       - VITE_API_URL=/api
 
-  caddy:
-    image: caddy:2
-    container_name: caddy
-    volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    environment:
-      - DOMAIN=${DOMAIN:-erp.thecloud9corp.com}
-    ports:
-      - "80:80"
-      - "443:443"
-    networks:
-      - c9erp-network
-      - proxy
-
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:
 networks:
   c9erp-network:
     driver: bridge
-  proxy:
-    external: true

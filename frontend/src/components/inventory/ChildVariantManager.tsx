@@ -64,21 +64,30 @@ export const ChildVariantManager: React.FC<ChildVariantManagerProps> = ({
       formData.append('file', file);
       formData.append('image_type', imageType);
 
-      // TODO: Call API to upload image
-      // For now, create a local preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageUrl = e.target?.result as string;
-        if (imageType === 'front') {
-          onUpdate(variant.id, { front_image_url: imageUrl });
-        } else {
-          onUpdate(variant.id, { back_image_url: imageUrl });
-        }
-        toast.success(`${imageType} image uploaded`);
-      };
-      reader.readAsDataURL(file);
+      // Call API to upload image
+      const response = await fetch(`/api/inventory/${variant.id}/images?image_type=${imageType}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || `Failed to upload ${imageType} image`);
+      }
+
+      const imageData = await response.json();
+      
+      if (imageType === 'front') {
+        onUpdate(variant.id, { front_image_url: imageData.image_url });
+      } else {
+        onUpdate(variant.id, { back_image_url: imageData.image_url });
+      }
+      toast.success(`${imageType} image uploaded successfully`);
     } catch (error) {
-      toast.error(`Failed to upload ${imageType} image`);
+      toast.error(`Failed to upload ${imageType} image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       if (imageType === 'front') {
         setUploadingFront(false);

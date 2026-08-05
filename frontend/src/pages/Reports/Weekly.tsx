@@ -62,7 +62,7 @@ export const WeeklyReportPage: React.FC = () => {
     return count;
   };
 
-  const handleGenerateReport = () => {
+  const handleGenerateReport = async () => {
     if (!dateFrom || !dateTo) {
       alert('Please select both start and end dates');
       return;
@@ -71,7 +71,37 @@ export const WeeklyReportPage: React.FC = () => {
       alert('Please select at least one variant');
       return;
     }
-    setReportView('view');
+    
+    try {
+      // Collect all selected variant IDs
+      const variantIds = Object.entries(selectedVariants)
+        .flatMap(([_, variants]) => Array.from(variants));
+      
+      // Call backend to generate report
+      const params = new URLSearchParams();
+      params.set('date_from', dateFrom);
+      params.set('date_to', dateTo);
+      params.set('format', 'json');
+      variantIds.forEach(id => params.append('variant_ids', String(id)));
+      
+      const response = await fetch(`/api/reports/custom?${params.toString()}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate report');
+      }
+      
+      const data = await response.json();
+      // TODO: Store report data and display in view mode
+      console.log('Report data:', data);
+      setReportView('view');
+    } catch (error) {
+      alert(`Error generating report: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   return (

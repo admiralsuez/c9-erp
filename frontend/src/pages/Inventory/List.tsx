@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, Button, Select, ListLoadingState, ListEmptyState, StatusBadge, TextInput } from '../../components/ui';
 import { cardErrorPadded } from '../../styles/classNames';
-import { Search, Plus, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, AlertCircle, ChevronDown } from 'lucide-react';
 import { useInventory } from '../../hooks/useInventory';
 import type { InventoryItemResponse } from '../../api/inventory';
 
@@ -36,6 +36,7 @@ export const InventoryListPage: React.FC = () => {
     return 'all';
   });
   const [currentPage, setCurrentPage] = useState(1);
+  const [expandedParents, setExpandedParents] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const statusParam = searchParams.get('status');
@@ -72,6 +73,18 @@ export const InventoryListPage: React.FC = () => {
       setCurrentPage(newPage);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  };
+
+  const toggleParentExpand = (parentId: number) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(parentId)) {
+        next.delete(parentId);
+      } else {
+        next.add(parentId);
+      }
+      return next;
+    });
   };
 
   return (
@@ -171,16 +184,41 @@ export const InventoryListPage: React.FC = () => {
                 {/* Parent or standalone item */}
                 <Card
                   padding="md"
-                  className={`cursor-pointer hover:shadow-md transition-shadow ${isParent ? 'border-primary-200 bg-primary-50/50' : ''}`}
-                  onClick={() => navigate(`/inventory/${item.id}`)}
+                  className={`hover:shadow-md transition-shadow ${isParent ? 'border-primary-200 bg-primary-50/50' : 'cursor-pointer'}`}
+                  onClick={() => {
+                    if (!isParent) navigate(`/inventory/${item.id}`);
+                  }}
                 >
                   <div className="flex items-center justify-between">
+                    {isParent && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleParentExpand(item.id);
+                        }}
+                        className="mr-2 p-1 hover:bg-primary-100 rounded transition-colors"
+                        title={expandedParents.has(item.id) ? 'Collapse variants' : 'Expand variants'}
+                      >
+                        <ChevronDown
+                          className={`w-4 h-4 text-primary-600 transition-transform ${
+                            expandedParents.has(item.id) ? 'rotate-0' : '-rotate-90'
+                          }`}
+                        />
+                      </button>
+                    )}
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
-                        <div>
+                        <div
+                          className="cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/inventory/${item.id}`);
+                          }}
+                        >
                           <h3 className="font-medium text-neutral-900">
                             {item.name}
-                            {isParent && <span className="ml-2 text-xs text-primary-600 font-normal">(Parent Product)</span>}
+                            {isParent && <span className="ml-2 text-xs text-primary-600 font-normal">(Parent)</span>}
                           </h3>
                           <p className="text-sm text-neutral-500">SKU: {item.sku}</p>
                         </div>
@@ -189,7 +227,7 @@ export const InventoryListPage: React.FC = () => {
                     <div className="flex items-center gap-4 text-right">
                       <div>
                         <p className="font-semibold text-neutral-900">
-                          {isParent ? `${totalChildStock} (across ${children.length} variants)` : Number(item.current_quantity)}
+                          {isParent ? `${totalChildStock} (${children.length} variants)` : Number(item.current_quantity)}
                         </p>
                         <p className="text-sm text-neutral-500">{children.length > 0 ? `${children.length} variant(s)` : `Min: ${Number(item.minimum_quantity)}`}</p>
                       </div>
@@ -199,7 +237,7 @@ export const InventoryListPage: React.FC = () => {
                 </Card>
 
                 {/* Children variants indented under parent */}
-                {isParent && (
+                {isParent && expandedParents.has(item.id) && (
                   <div className="ml-6 mt-1 space-y-1 border-l-2 border-primary-200 pl-3">
                     {children.map((child) => {
                       const childStatus = getStatus(child);
@@ -213,7 +251,7 @@ export const InventoryListPage: React.FC = () => {
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
                               <h4 className="text-sm font-medium text-neutral-900">{child.name}</h4>
-                              <p className="text-xs text-neutral-500">SKU: {child.sku}</p>
+                              <p className="text-xs text-neutral-500">Serial: {child.sku}</p>
                             </div>
                             <div className="flex items-center gap-3 text-right">
                               <div>

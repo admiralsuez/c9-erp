@@ -7,9 +7,7 @@ import { ArrowLeft, Upload, Plus, Trash2, Loader } from 'lucide-react';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { useVendors } from '../../hooks/useVendors';
 import { useInventory } from '../../hooks/useInventory';
-import { inventoryApi } from '../../api/inventory';
 import type { OrderCreateRequest } from '../../api/orders';
-import type { InventoryItemResponse } from '../../api/inventory';
 
 interface PastOrderItem {
   id: string;

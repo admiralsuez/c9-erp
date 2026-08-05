@@ -1,22 +1,15 @@
 import React, { useRef } from 'react';
 import { Printer } from 'lucide-react';
 import { Button } from './ui';
-import type { Order } from '../types';
 
 interface ChallanProps {
-  order: Order;
-  approverName?: string;
-  issuedByName?: string;
-  receivedByName?: string;
+  order: any; // Accept any order-like object (Order or OrderResponse)
   companyName?: string;
   companyAddress?: string;
 }
 
 export const Challan: React.FC<ChallanProps> = ({
   order,
-  approverName = '_________',
-  issuedByName = '_________',
-  receivedByName = '_________',
   companyName = 'CLOUD9 BEVERAGES',
   companyAddress = 'Address: La Lavado Fabrica, Plot No. K/29, Ambernath, MIDC, Anand Nagar, Ambernath (E) - 421501.',
 }) => {

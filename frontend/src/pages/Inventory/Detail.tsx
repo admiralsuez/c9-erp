@@ -7,6 +7,7 @@ import { formatDate, formatDateTime } from '../../utils/format';
 import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal, Loader, Barcode, Info } from 'lucide-react';
 import { SerialNumberInput } from '../../components/inventory/SerialNumberInput';
 import { SerialNumberImport } from '../../components/inventory/SerialNumberImport';
+import { ChildVariantManager } from '../../components/inventory/ChildVariantManager';
 import {
   useInventoryItem,
   useUpdateInventoryItem,
@@ -281,34 +282,32 @@ export const InventoryDetailPage: React.FC = () => {
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">
             Child Variants ({item.children.length})
           </h2>
+          <p className="text-sm text-neutral-600 mb-4">
+            Click "Edit" to manage attributes and upload product images (front/back).
+          </p>
           <div className="space-y-2">
             {item.children.map((child) => (
-              <div
+              <ChildVariantManager
                 key={child.id}
-                className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg border border-neutral-200 hover:border-primary-300 transition-colors cursor-pointer"
-                onClick={() => navigate(`/inventory/${child.id}`)}
-              >
-                <div className="flex-1">
-                  <p className="font-medium text-neutral-900 text-sm">{child.name}</p>
-                  <p className="text-xs text-neutral-500">SKU: {child.sku}</p>
-                  {child.description && (
-                    <p className="text-xs text-neutral-600 mt-1">{child.description}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 text-right">
-                  <div>
-                    <p className="font-semibold text-neutral-900 text-sm">{Number(child.current_quantity)}</p>
-                    <p className="text-xs text-neutral-500">qty</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); navigate(`/inventory/${child.id}`); }}
-                    className="px-3 py-1.5 text-xs bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
-                  >
-                    View
-                  </button>
-                </div>
-              </div>
+                variant={{
+                  id: child.id,
+                  name: child.name,
+                  sku: child.sku,
+                  description: child.description || '',
+                  image_url: child.image_url,
+                  front_image_url: (child.description?.includes('front_image_url')) ? child.image_url : undefined,
+                  back_image_url: (child.description?.includes('back_image_url')) ? child.image_url : undefined,
+                }}
+                onUpdate={(id, data) => {
+                  if (data.description) {
+                    updateItem({
+                      itemId: id,
+                      data: { description: data.description },
+                    });
+                  }
+                }}
+                isUpdating={isUpdating}
+              />
             ))}
           </div>
         </Card>

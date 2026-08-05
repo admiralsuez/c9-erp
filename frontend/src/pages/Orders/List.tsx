@@ -90,13 +90,22 @@ export const OrdersListPage: React.FC = () => {
           <h1 className="text-3xl font-bold text-neutral-900">Orders</h1>
           <p className="text-neutral-600 mt-1">Manage purchase orders ({totalItems} orders)</p>
         </div>
-        <Button
-          onClick={() => navigate('/orders/new')}
-          className="flex items-center gap-2 bg-primary-600 text-white hover:bg-primary-700"
-        >
-          <Plus className="w-4 h-4" />
-          Create Order
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => navigate('/orders/past')}
+            className="flex items-center gap-2 border border-neutral-300 hover:bg-neutral-50 text-neutral-700"
+          >
+            <Plus className="w-4 h-4" />
+            Add Past Order
+          </Button>
+          <Button
+            onClick={() => navigate('/orders/new')}
+            className="flex items-center gap-2 bg-primary-600 text-white hover:bg-primary-700"
+          >
+            <Plus className="w-4 h-4" />
+            Create Order
+          </Button>
+        </div>
       </div>
 
       {error && (

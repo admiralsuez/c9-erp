@@ -14,6 +14,7 @@ import { VendorFormPage } from '../pages/Vendors/Form';
 import { OrdersListPage } from '../pages/Orders/List';
 import { OrderCreatePage } from '../pages/Orders/Create';
 import { OrderDetailPage } from '../pages/Orders/Detail';
+import { PastOrdersPage } from '../pages/Orders/PastOrders';
 import { NotificationsPage } from '../pages/Notifications/Index';
 import { ApprovalsPage } from '../pages/Approvals/Index';
 import { ReportsPage } from '../pages/Reports';
@@ -125,6 +126,17 @@ export const AppRouter: React.FC = () => {
             <ProtectedRoute>
               <AppShell>
                 <OrderCreatePage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/orders/past"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <PastOrdersPage />
               </AppShell>
             </ProtectedRoute>
           }

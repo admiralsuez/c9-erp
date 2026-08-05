@@ -32,7 +32,7 @@ export interface AuthResponse {
 export interface InventoryItem {
   id: number;
   name: string;
-  erp_code: string;
+  sku: string;
   barcode?: string;
   qr_code_data?: string;
   category_id?: number;

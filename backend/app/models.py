@@ -243,7 +243,7 @@ class InventoryItem(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
-    erp_code = Column(String(100), unique=True, nullable=False)
+    sku = Column(String(100), unique=True, nullable=False)
     barcode = Column(String(100), unique=True, nullable=True)
     qr_code_data = Column(String(255))
     category_id = Column(Integer, ForeignKey("inventory_categories.id"))
@@ -272,14 +272,14 @@ class InventoryItem(Base):
     children = relationship("InventoryItem", back_populates="parent", cascade="all, delete-orphan")
     
     __table_args__ = (
-        Index("idx_inventory_erp_code", "erp_code"),
+        Index("idx_inventory_sku", "sku"),
         Index("idx_inventory_barcode", "barcode"),
         Index("idx_inventory_category", "category_id"),
         Index("idx_inventory_parent", "parent_id"),
         Index("idx_inventory_deleted_at", "deleted_at"),
         Index("idx_inventory_is_draft", "is_draft"),
         Index("idx_inventory_low_stock", "current_quantity", "minimum_quantity"),
-        UniqueConstraint("erp_code", name="uq_inventory_erp_code"),
+        UniqueConstraint("sku", name="uq_inventory_sku"),
     )
 
 

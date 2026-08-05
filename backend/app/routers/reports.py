@@ -22,11 +22,19 @@ PERIOD_MAP = {
 def generate_report(
     period: str = Query(..., pattern="^(weekly|monthly|quarterly)$"),
     format: str = Query("pdf", pattern="^(pdf|excel|json)$"),
+    variant_ids: Optional[List[int]] = Query(None, description="Filter by inventory variant IDs"),
     view: bool = Query(False, description="If true, serve inline for browser viewing instead of download"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    """Generate a comprehensive weekly/monthly/quarterly report."""
+    """Generate a comprehensive weekly/monthly/quarterly report.
+    
+    Args:
+        period: Report period (weekly, monthly, quarterly)
+        format: Output format (pdf, excel, json)
+        variant_ids: Optional list of inventory variant IDs to include
+        view: If true, serve inline for browser viewing
+    """
     delta = PERIOD_MAP.get(period)
     if not delta:
         raise HTTPException(status_code=400, detail="Invalid period")
@@ -35,6 +43,11 @@ def generate_report(
     period_start = now - delta
     analytics = get_analytics_service(db)
     analytics_data = analytics.get_dashboard_overview(date_from=period_start, date_to=now)
+    
+    # Filter by variants if provided
+    if variant_ids:
+        analytics_data['variant_filter'] = variant_ids
+        analytics_data['filtered_by_variants'] = True
 
     if format == "json":
         from fastapi.responses import JSONResponse
@@ -68,13 +81,24 @@ def generate_custom_report(
     date_from: str = Query(..., description="Start date (ISO format, e.g. 2026-01-01)"),
     date_to: str = Query(..., description="End date (ISO format, e.g. 2026-12-31)"),
     item_ids: Optional[List[int]] = Query(None, description="Filter by inventory item IDs"),
+    variant_ids: Optional[List[int]] = Query(None, description="Filter by inventory variant IDs"),
     vendor_ids: Optional[List[int]] = Query(None, description="Filter by vendor IDs"),
     format: str = Query("pdf", pattern="^(pdf|excel|json)$"),
     view: bool = Query(False, description="If true, serve inline for browser viewing instead of download"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    """Generate a custom report filtered by date range, items (SKU), and/or vendors."""
+    """Generate a custom report filtered by date range, items/variants, and/or vendors.
+    
+    Args:
+        date_from: Report start date (ISO format)
+        date_to: Report end date (ISO format)
+        item_ids: Filter by parent inventory item IDs
+        variant_ids: Filter by inventory variant IDs (child items)
+        vendor_ids: Filter by vendor IDs
+        format: Output format (pdf, excel, json)
+        view: If true, serve inline for browser viewing
+    """
     try:
         start = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
         end = datetime.fromisoformat(date_to).replace(tzinfo=timezone.utc)
@@ -83,8 +107,13 @@ def generate_custom_report(
 
     analytics = get_analytics_service(db)
 
-    orders = analytics.get_filtered_orders(start, end, item_ids, vendor_ids)
-    inventory = analytics.get_filtered_inventory(item_ids)
+    # Combine item_ids and variant_ids for filtering
+    effective_item_ids = item_ids or []
+    if variant_ids:
+        effective_item_ids = list(set(effective_item_ids + variant_ids))
+    
+    orders = analytics.get_filtered_orders(start, end, effective_item_ids or None, vendor_ids)
+    inventory = analytics.get_filtered_inventory(effective_item_ids or None)
 
     report_data = {
         "orders": orders,
@@ -99,6 +128,7 @@ def generate_custom_report(
         "calculated_at": datetime.now(timezone.utc).isoformat(),
         "filters": {
             "item_ids": item_ids,
+            "variant_ids": variant_ids,
             "vendor_ids": vendor_ids,
         },
     }

@@ -7,6 +7,8 @@ import { ArrowLeft, Upload, Plus, Trash2, Loader } from 'lucide-react';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { useVendors } from '../../hooks/useVendors';
 import { useInventory } from '../../hooks/useInventory';
+import { useUploadDocument } from '../../hooks/useSettings';
+import { DocumentUploadForm } from '../../components/DocumentUploadForm';
 import type { OrderCreateRequest } from '../../api/orders';
 
 interface PastOrderItem {
@@ -28,8 +30,17 @@ export const PastOrdersPage: React.FC = () => {
   const [selectedItemId, setSelectedItemId] = useState<number | ''>('');
   const [selectedItemQty, setSelectedItemQty] = useState('');
   
+  // Document uploads
+  const [documents, setDocuments] = useState<{ file: File; category: string; notes: string }[]>([]);
+  const uploadDocument = useUploadDocument();
+  
   const { mutate: createOrder, isPending } = useCreateOrder((order) => {
-    navigate(`/orders/${order.id}`);
+    // Upload documents after order is created
+    if (documents.length > 0) {
+      uploadDocuments(order.id);
+    } else {
+      navigate(`/orders/${order.id}`);
+    }
   });
   
   const { data: vendorsData, isLoading: vendorsLoading } = useVendors(1, 100);
@@ -72,6 +83,35 @@ export const PastOrdersPage: React.FC = () => {
 
   const removeItem = (id: string) => {
     setItems(items.filter((item) => item.id !== id));
+  };
+
+  const handleAddDocument = (file: File, category: string, notes: string) => {
+    setDocuments([...documents, { file, category, notes }]);
+  };
+
+  const removeDocument = (idx: number) => {
+    setDocuments(documents.filter((_, i) => i !== idx));
+  };
+
+  const uploadDocuments = (orderId: number) => {
+    let uploaded = 0;
+    documents.forEach((doc) => {
+      uploadDocument.mutate(
+        { orderId, docCategory: doc.category, file: doc.file, notes: doc.notes },
+        {
+          onSuccess: () => {
+            uploaded++;
+            if (uploaded === documents.length) {
+              toast.success('All documents uploaded successfully');
+              navigate(`/orders/${orderId}`);
+            }
+          },
+          onError: () => {
+            toast.error(`Failed to upload ${doc.file.name}`);
+          },
+        }
+      );
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -283,6 +323,42 @@ export const PastOrdersPage: React.FC = () => {
               Note: Order date will be automatically prepended to the remarks.
             </p>
           </div>
+        </Card>
+
+        {/* Documents Section */}
+        <Card padding="lg">
+          <h2 className="text-lg font-semibold text-neutral-900 mb-4">Documents (Optional)</h2>
+          <p className="text-sm text-neutral-600 mb-4">
+            Upload requisitions, challans, or other supporting documents for this order. You can add these now or upload them later from the order detail page.
+          </p>
+          
+          {/* Document Upload Form */}
+          <DocumentUploadForm onAdd={handleAddDocument} />
+          
+          {/* Documents List */}
+          {documents.length > 0 && (
+            <div className="mt-6 space-y-3">
+              <h3 className="text-sm font-medium text-neutral-900">Added Documents ({documents.length})</h3>
+              {documents.map((doc, idx) => (
+                <div key={idx} className="flex items-center justify-between bg-neutral-50 rounded-lg p-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-neutral-900">{doc.file.name}</p>
+                    <p className="text-xs text-neutral-600 mt-1">
+                      Type: <span className="font-medium">{doc.category.replace(/_/g, ' ').toUpperCase()}</span>
+                      {doc.notes && ` • Notes: ${doc.notes}`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeDocument(idx)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         {/* Actions */}

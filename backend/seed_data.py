@@ -242,19 +242,19 @@ def seed_inventory_items():
     promo_cat = db.query(InventoryCategory).filter(InventoryCategory.name == "Promotional Items").first()
     
     items_list = [
-        ("Promotional Sticker Pack", "SKU-001", "8901234567890", "consumable", 500, 50, bins[0].id if bins else None),
-        ("Black Umbrella - Returnable", "SKU-002", "8901234567891", "returnable", 100, 20, bins[1].id if len(bins) > 1 else None),
-        ("LED Glow Sign", "SKU-003", "8901234567892", "returnable", 50, 10, bins[2].id if len(bins) > 2 else None),
-        ("Acrylic Stand", "SKU-004", "8901234567893", "returnable", 75, 15, bins[3].id if len(bins) > 3 else None),
-        ("Bar Mat - Rubber", "SKU-005", "8901234567894", "returnable", 200, 25, bins[4].id if len(bins) > 4 else None),
+        ("Promotional Sticker Pack", "ERP-001", "8901234567890", "consumable", 500, 50, bins[0].id if bins else None),
+        ("Black Umbrella - Returnable", "ERP-002", "8901234567891", "returnable", 100, 20, bins[1].id if len(bins) > 1 else None),
+        ("LED Glow Sign", "ERP-003", "8901234567892", "returnable", 50, 10, bins[2].id if len(bins) > 2 else None),
+        ("Acrylic Stand", "ERP-004", "8901234567893", "returnable", 75, 15, bins[3].id if len(bins) > 3 else None),
+        ("Bar Mat - Rubber", "ERP-005", "8901234567894", "returnable", 200, 25, bins[4].id if len(bins) > 4 else None),
     ]
     
-    for name, sku, barcode, item_type, quantity, min_qty, bin_id in items_list:
-        item = db.query(InventoryItem).filter(InventoryItem.sku == sku).first()
+    for name, erp_code, barcode, item_type, quantity, min_qty, bin_id in items_list:
+        item = db.query(InventoryItem).filter(InventoryItem.erp_code == erp_code).first()
         if not item:
             item = InventoryItem(
                 name=name,
-                sku=sku,
+                erp_code=erp_code,
                 barcode=barcode,
                 qr_code_data=barcode,
                 category_id=promo_cat.id if promo_cat else None,

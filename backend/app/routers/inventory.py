@@ -129,12 +129,12 @@ def list_items(
     """List inventory items with filtering and search. Returns paginated response."""
     query = db.query(InventoryItem).filter(InventoryItem.deleted_at == None)
     
-    # Search by name, SKU, or barcode
+    # Search by name, ERP Code, or barcode
     if search:
         query = query.filter(
             or_(
                 InventoryItem.name.ilike(f"%{search}%"),
-                InventoryItem.sku.ilike(f"%{search}%"),
+                InventoryItem.erp_code.ilike(f"%{search}%"),
                 InventoryItem.barcode.ilike(f"%{search}%")
             )
         )

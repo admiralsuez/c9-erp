@@ -18,6 +18,8 @@ import { NotificationsPage } from '../pages/Notifications/Index';
 import { ApprovalsPage } from '../pages/Approvals/Index';
 import { ReportsPage } from '../pages/Reports';
 import { NotFoundPage } from '../pages/Stubs';
+import ForgotPassword from '../pages/Auth/ForgotPassword';
+import PasswordReset from '../pages/Auth/PasswordReset';
 
 export const AppRouter: React.FC = () => {
   return (
@@ -25,6 +27,8 @@ export const AppRouter: React.FC = () => {
       <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<PasswordReset />} />
 
         {/* Protected Routes with AppShell */}
         <Route

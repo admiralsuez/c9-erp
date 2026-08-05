@@ -7,7 +7,7 @@ import { Button, Input, Card } from '../components/ui';
 import { loginSchema } from '../utils/validation';
 import { useAuth } from '../hooks/useAuth';
 import { useSettings } from '../hooks/useSettings';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -15,6 +15,7 @@ export const LoginPage: React.FC = () => {
   const { data: settings } = useSettings();
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -92,15 +93,33 @@ export const LoginPage: React.FC = () => {
 
             {/* Password Field */}
             <div>
-              <Input
-                {...register('password')}
-                type="password"
-                placeholder="Password"
-                label="Password"
-                error={errors.password?.message}
-                isRounded
-                disabled={isLoading}
-              />
+              <label className="block text-sm font-medium text-neutral-700 mb-2">Password</label>
+              <div className="relative">
+                <Input
+                  {...register('password')}
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Password"
+                  error={errors.password?.message}
+                  isRounded
+                  disabled={isLoading}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 disabled:opacity-50"
+                  disabled={isLoading}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+              {errors.password?.message && (
+                <p className="mt-1 text-sm text-error">{errors.password.message}</p>
+              )}
             </div>
 
             {/* Remember Me */}
@@ -133,10 +152,7 @@ export const LoginPage: React.FC = () => {
             <button
               type="button"
               className="text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors"
-              onClick={() => {
-                // Forgot password - can be implemented later
-                setApiError('Password reset feature coming soon');
-              }}
+              onClick={() => navigate('/forgot-password')}
               disabled={isLoading}
             >
               Forgot password?

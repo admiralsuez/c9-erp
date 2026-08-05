@@ -263,7 +263,7 @@ class WarehouseResponse(BaseModel):
 # ============ INVENTORY ITEMS ============
 class InventoryItemBase(BaseModel):
     name: str
-    sku: str
+    erp_code: str
     barcode: Optional[str] = None
     category_id: Optional[int] = None
     item_type: str = "consumable"
@@ -283,7 +283,7 @@ class InventoryItemCreate(InventoryItemBase):
 
 class InventoryItemChildCreate(BaseModel):
     name: str
-    sku: str
+    erp_code: str
     barcode: Optional[str] = None
     item_type: str = "consumable"
     current_quantity: float = 0

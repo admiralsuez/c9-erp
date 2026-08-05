@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { ImageCropModal } from '../../components/ImageCropModal';
+import { Challan } from '../../components/Challan';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Card, Button, ListLoadingState, StatusBadge } from '../../components/ui';
@@ -1550,6 +1551,17 @@ export const OrderDetailPage: React.FC = () => {
               {currentUser?.full_name} • {currentUser?.email}
             </p>
           </div>
+        </Card>
+      )}
+
+      {/* Challan Section */}
+      {order && order.status !== 'draft' && (
+        <Card padding="lg">
+          <h2 className="text-lg font-semibold text-neutral-900 mb-4">Dispatch Challan</h2>
+          <p className="text-sm text-neutral-600 mb-4">
+            Print this challan for dispatch. It includes all order details and can be signed by the recipient.
+          </p>
+          <Challan order={order} />
         </Card>
       )}
 

@@ -56,6 +56,34 @@ logger.info(f"Log file: {_log_path}")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- startup ---
+    # --- Database initialization checks ---
+    try:
+        from sqlalchemy import inspect, text
+        from sqlalchemy.orm import Session
+        
+        inspector = inspect(engine)
+        db_tables = inspector.get_table_names()
+        logger.info(f"Database initialization check: Found {len(db_tables)} tables")
+        
+        # Log table names and their indexes
+        for table_name in sorted(db_tables):
+            indexes = inspector.get_indexes(table_name)
+            logger.info(f"  ✓ Table: {table_name} ({len(indexes)} indexes)")
+            if indexes:
+                for idx in indexes:
+                    logger.debug(f"    - Index: {idx['name']} on {idx['column_names']}")
+        
+        # Verify critical tables exist
+        critical_tables = ['user', 'inventory_item', 'order', 'vendor']
+        missing_tables = [t for t in critical_tables if t not in db_tables]
+        if missing_tables:
+            logger.warning(f"Missing critical tables: {missing_tables}. Running migrations...")
+        else:
+            logger.info("All critical tables verified")
+            
+    except Exception as e:
+        logger.warning(f"Database initialization check failed: {e}")
+    
     # --- Alembic migrations (wrapped to avoid startup crash) ---
     try:
         from alembic.config import Config

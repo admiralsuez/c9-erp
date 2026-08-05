@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button, ListLoadingState, ListEmptyState } from '../../components/ui';
-import { ArrowLeft, ChevronDown, Download, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Download, AlertCircle, CheckSquare, Square } from 'lucide-react';
 import { useInventory } from '../../hooks/useInventory';
+import { datePresets, formatDateISO } from '../../utils/dateUtils';
 
 interface SelectedVariants {
   [parentId: number]: Set<number>;
@@ -52,6 +53,45 @@ export const WeeklyReportPage: React.FC = () => {
       }
       return next;
     });
+  };
+
+  const toggleSelectAllVariants = (parentId: number) => {
+    const parent = parentItems.find(p => p.id === parentId);
+    if (!parent || !parent.children) return;
+
+    setSelectedVariants((prev) => {
+      const next = { ...prev };
+      const childrenIds = parent.children!.map(c => c.id);
+      const currentSelected = next[parentId]?.size || 0;
+      const allSelected = currentSelected === childrenIds.length;
+
+      if (allSelected) {
+        delete next[parentId];
+      } else {
+        next[parentId] = new Set(childrenIds);
+      }
+      return next;
+    });
+  };
+
+  const applyDatePreset = (preset: any) => {
+    const range = preset.getValue();
+    setDateFrom(formatDateISO(range.from));
+    setDateTo(formatDateISO(range.to));
+  };
+
+  const selectAllVariants = () => {
+    const newSelected: SelectedVariants = {};
+    parentItems.forEach((parent) => {
+      if (parent.children && parent.children.length > 0) {
+        newSelected[parent.id] = new Set(parent.children.map(c => c.id));
+      }
+    });
+    setSelectedVariants(newSelected);
+  };
+
+  const deselectAllVariants = () => {
+    setSelectedVariants({});
   };
 
   const getSelectedCount = (): number => {
@@ -128,8 +168,8 @@ export const WeeklyReportPage: React.FC = () => {
       {reportView === 'config' ? (
         <>
           <Card padding="lg">
-            <h2 className="text-lg font-semibold text-neutral-900 mb-4">Configuration</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <h2 className="text-lg font-semibold text-neutral-900 mb-4">Date Range</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-2">From Date</label>
                 <input
@@ -149,13 +189,47 @@ export const WeeklyReportPage: React.FC = () => {
                 />
               </div>
             </div>
+            <div className="border-t border-neutral-200 pt-4">
+              <p className="text-sm font-medium text-neutral-700 mb-2">Quick Presets</p>
+              <div className="flex flex-wrap gap-2">
+                {datePresets.map((preset) => (
+                  <button
+                    key={preset.label}
+                    onClick={() => applyDatePreset(preset)}
+                    className="px-3 py-1 text-xs font-medium text-neutral-700 bg-neutral-100 rounded hover:bg-primary-100 hover:text-primary-700 transition-colors"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </Card>
 
           <Card padding="lg">
-            <h2 className="text-lg font-semibold text-neutral-900 mb-3">
-              Select Variants ({getSelectedCount()} selected)
-            </h2>
-            <p className="text-sm text-neutral-600 mb-3">Click parent to expand and select children</p>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-neutral-900">
+                  Select Variants ({getSelectedCount()} selected)
+                </h2>
+                <p className="text-sm text-neutral-600 mt-1">Click parent to expand and select children</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={selectAllVariants}
+                  className="px-3 py-2 text-sm font-medium text-primary-700 bg-primary-50 rounded hover:bg-primary-100 transition-colors flex items-center gap-1"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  Select All
+                </button>
+                <button
+                  onClick={deselectAllVariants}
+                  className="px-3 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 rounded hover:bg-neutral-200 transition-colors flex items-center gap-1"
+                >
+                  <Square className="w-4 h-4" />
+                  Deselect All
+                </button>
+              </div>
+            </div>
 
             {isLoading ? (
               <ListLoadingState message="Loading..." />
@@ -186,6 +260,18 @@ export const WeeklyReportPage: React.FC = () => {
                           <p className="text-sm font-medium text-neutral-900">{parent.name}</p>
                           <p className="text-xs text-neutral-500">SKU: {parent.sku}</p>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectAllVariants(parent.id)}
+                          className="p-1 hover:bg-neutral-200 rounded text-neutral-600 hover:text-primary-600"
+                          title={count === children.length ? 'Deselect all' : 'Select all'}
+                        >
+                          {count === children.length ? (
+                            <CheckSquare className="w-4 h-4 text-primary-600" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
                         <span className="text-xs text-neutral-600 bg-neutral-200 px-2 py-1 rounded">
                           {count} / {children.length}
                         </span>

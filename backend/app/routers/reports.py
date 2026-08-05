@@ -85,6 +85,8 @@ def generate_custom_report(
     vendor_ids: Optional[List[int]] = Query(None, description="Filter by vendor IDs"),
     format: str = Query("pdf", pattern="^(pdf|excel|json)$"),
     view: bool = Query(False, description="If true, serve inline for browser viewing instead of download"),
+    page: int = Query(1, ge=1, description="Page number for pagination"),
+    page_size: int = Query(50, ge=10, le=500, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -98,6 +100,8 @@ def generate_custom_report(
         vendor_ids: Filter by vendor IDs
         format: Output format (pdf, excel, json)
         view: If true, serve inline for browser viewing
+        page: Page number for pagination (only for JSON format)
+        page_size: Items per page (only for JSON format)
     """
     try:
         start = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
@@ -112,14 +116,12 @@ def generate_custom_report(
     if variant_ids:
         effective_item_ids = list(set(effective_item_ids + variant_ids))
     
-    orders = analytics.get_filtered_orders(start, end, effective_item_ids or None, vendor_ids)
-    inventory = analytics.get_filtered_inventory(effective_item_ids or None)
+    orders = analytics.get_filtered_orders(start, end, effective_item_ids or None, vendor_ids, page=page, page_size=page_size)
+    inventory = analytics.get_filtered_inventory(effective_item_ids or None, page=page, page_size=page_size)
 
     report_data = {
-        "orders": orders,
-        "inventory": inventory,
-        "total_orders": len(orders),
-        "total_items": len(inventory),
+        "orders": orders if isinstance(orders, dict) else {"data": orders},
+        "inventory": inventory if isinstance(inventory, dict) else {"data": inventory},
         "period": {
             "label": "Custom",
             "start": start.strftime("%Y-%m-%d"),

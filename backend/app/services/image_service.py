@@ -10,6 +10,12 @@ import io
 from pathlib import Path
 import logging
 
+try:
+    from PIL import Image
+    HAS_PILLOW = True
+except ImportError:
+    HAS_PILLOW = False
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -139,6 +145,89 @@ class ImageUploadService:
         except Exception as e:
             logger.error(f"Failed to delete image {image_url}: {str(e)}")
             return False
+    
+    def compress_image(self, file_content: bytes, quality: int = 85, max_width: int = 1920) -> bytes:
+        """
+        Compress an image to reduce file size while maintaining quality
+        
+        Args:
+            file_content: The original image bytes
+            quality: JPEG/WebP quality (1-100, default 85)
+            max_width: Maximum width in pixels (default 1920)
+            
+        Returns:
+            Compressed image bytes
+        """
+        if not HAS_PILLOW:
+            logger.warning("Pillow not installed, returning original image")
+            return file_content
+        
+        try:
+            # Open image from bytes
+            img = Image.open(io.BytesIO(file_content))
+            
+            # Convert RGBA to RGB if necessary
+            if img.mode == 'RGBA':
+                rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+                rgb_img.paste(img, mask=img.split()[3])
+                img = rgb_img
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Resize if too large
+            if img.width > max_width:
+                ratio = max_width / img.width
+                new_height = int(img.height * ratio)
+                img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+            
+            # Compress and save
+            output = io.BytesIO()
+            img.save(output, format='JPEG', quality=quality, optimize=True)
+            return output.getvalue()
+            
+        except Exception as e:
+            logger.error(f"Failed to compress image: {str(e)}")
+            return file_content
+    
+    def generate_thumbnail(self, file_content: bytes, thumb_width: int = 200, thumb_height: int = 200) -> bytes:
+        """
+        Generate a thumbnail from an image
+        
+        Args:
+            file_content: The original image bytes
+            thumb_width: Thumbnail width in pixels
+            thumb_height: Thumbnail height in pixels
+            
+        Returns:
+            Thumbnail image bytes
+        """
+        if not HAS_PILLOW:
+            logger.warning("Pillow not installed, returning original image")
+            return file_content
+        
+        try:
+            # Open image from bytes
+            img = Image.open(io.BytesIO(file_content))
+            
+            # Convert RGBA to RGB if necessary
+            if img.mode == 'RGBA':
+                rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+                rgb_img.paste(img, mask=img.split()[3])
+                img = rgb_img
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Create thumbnail with aspect ratio preservation
+            img.thumbnail((thumb_width, thumb_height), Image.Resampling.LANCZOS)
+            
+            # Save thumbnail
+            output = io.BytesIO()
+            img.save(output, format='JPEG', quality=80, optimize=True)
+            return output.getvalue()
+            
+        except Exception as e:
+            logger.error(f"Failed to generate thumbnail: {str(e)}")
+            return file_content
     
     def validate_image_file(self, file_content: bytes, filename: str) -> dict:
         """

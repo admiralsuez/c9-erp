@@ -170,7 +170,7 @@ export const Challan: React.FC<ChallanProps> = ({
           </thead>
           <tbody>
             {order.items && order.items.length > 0 ? (
-              order.items.map((item, idx) => (
+              order.items.map((item: any, idx: number) => (
                 <tr key={item.id}>
                   <td
                     style={{

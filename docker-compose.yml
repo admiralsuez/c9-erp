@@ -75,9 +75,11 @@ services:
     image: caddy:2
     container_name: caddy
     volumes:
-      - /root/apps/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
+    environment:
+      - DOMAIN=${DOMAIN:-erp.thecloud9corp.com}
     ports:
       - "80:80"
       - "443:443"

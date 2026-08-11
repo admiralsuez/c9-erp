@@ -310,6 +310,9 @@ class InventoryItemUpdate(BaseModel):
     parent_id: Optional[int] = None
     is_container: Optional[bool] = None
     attributes: Optional[dict] = None
+    expiry_date: Optional[datetime] = None
+    allow_no_expiry: Optional[bool] = None
+    stock_status: Optional[str] = None  # active | expired | damaged
 
 
 class InventoryTransactionResponse(BaseModel):
@@ -334,6 +337,9 @@ class InventoryItemResponse(InventoryItemBase):
     is_active: bool
     is_container: bool = False
     is_draft: bool = False
+    expiry_date: Optional[datetime] = None
+    allow_no_expiry: bool = True
+    stock_status: str = "active"  # active | expired | damaged
     created_at: datetime
     updated_at: datetime
     children: List['InventoryItemResponse'] = []

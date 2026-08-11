@@ -258,6 +258,9 @@ class InventoryItem(Base):
     is_container = Column(Boolean, default=False, nullable=False)
     is_draft = Column(Boolean, default=False, nullable=False)  # Draft status for unpublished items
     is_active = Column(Boolean, default=True, nullable=False)
+    expiry_date = Column(DateTime(timezone=True), nullable=True)  # Optional expiry date for perishables
+    allow_no_expiry = Column(Boolean, default=True, nullable=False)  # Allow items without expiry
+    stock_status = Column(String(50), default="active", nullable=False)  # active | expired | damaged
     deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)

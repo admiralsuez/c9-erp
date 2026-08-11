@@ -9,6 +9,7 @@ from app.schemas import (
     RoleSchema, RoleCreate, RoleUpdate,
     PermissionSchema, SignatureResponse, SignatureUpdate
 )
+from app.services.pagination_utils import paginate_query, total_pages
 from typing import List
 from datetime import datetime, timezone
 
@@ -26,11 +27,11 @@ def list_users(
     query = db.query(User).options(
         selectinload(User.role).selectinload(Role.permissions)
     ).filter(User.deleted_at == None)
-    total = query.count()
-    skip = (page - 1) * size
-    users = query.offset(skip).limit(size).all()
-    pages = (total + size - 1) // size if total > 0 else 1
-    
+    sliced, page, size, total = paginate_query(query, page, size)
+
+    users = sliced.all()
+    pages = total_pages(total, size) or 1
+
     return {
         "items": [UserResponse.model_validate(u) for u in users],
         "total": total,

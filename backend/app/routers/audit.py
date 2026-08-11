@@ -4,6 +4,7 @@ from sqlalchemy import func
 from app.core.database import get_db
 from app.core.auth import get_current_user
 from app.models import User, AuditLog
+from app.services.pagination_utils import paginate_query, total_pages
 
 from typing import Optional
 
@@ -32,10 +33,9 @@ def list_audit_logs(
     if entity_type:
         query = query.filter(AuditLog.entity_type == entity_type)
     
-    total = query.count()
-    pages = (total + size - 1) // size if total > 0 else 0
-    skip = (page - 1) * size
-    logs = query.order_by(AuditLog.created_at.desc()).offset(skip).limit(size).all()
+    sliced, page, size, total = paginate_query(query, page, size, default_size=50)
+    pages = total_pages(total, size) if total > 0 else 0
+    logs = sliced.order_by(AuditLog.created_at.desc()).all()
     
     return {
         "items": logs,

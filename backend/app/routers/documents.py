@@ -6,6 +6,7 @@ from app.core.auth import get_current_user, require_admin
 from app.models import User, Document, Order
 from app.schemas import DocumentResponse, DocumentVersionHistoryResponse
 from app.services.storage import get_storage_backend, LocalDiskBackend
+from app.services.validators import validate_file_type, validate_max_size
 from typing import List, Optional
 from datetime import datetime, timezone
 import os
@@ -27,20 +28,8 @@ def get_file_type(filename: str) -> str:
 
 def validate_file(filename: str, file_size: int) -> tuple:
     """Validate file before upload."""
-    file_type = get_file_type(filename)
-    
-    if file_type not in ALLOWED_FILE_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type .{file_type} not allowed. Allowed: {', '.join(ALLOWED_FILE_TYPES)}"
-        )
-    
-    if file_size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE / 1024 / 1024}MB"
-        )
-    
+    file_type = validate_file_type(filename, ALLOWED_FILE_TYPES)
+    validate_max_size(file_size, MAX_FILE_SIZE)
     return file_type
 
 

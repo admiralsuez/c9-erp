@@ -4,6 +4,7 @@ from app.core.database import get_db
 from app.core.auth import get_current_user, require_admin
 from app.models import ApprovalRule, User, Role
 from app.schemas import ApprovalRuleCreateRequest, ApprovalRuleResponse
+from app.services.pagination_utils import paginate_query, get_offset
 from typing import List
 
 router = APIRouter(prefix="/approval-rules", tags=["Approval"])
@@ -17,8 +18,13 @@ def list_approval_rules(
     current_user: User = Depends(require_admin)
 ):
     """List all approval rules (admin only)."""
-    skip = (page - 1) * size
-    rules = db.query(ApprovalRule).order_by(ApprovalRule.priority).offset(skip).limit(size).all()
+    rules = (
+        db.query(ApprovalRule)
+        .order_by(ApprovalRule.priority)
+        .offset(get_offset(page, size))
+        .limit(size)
+        .all()
+    )
     return rules
 
 

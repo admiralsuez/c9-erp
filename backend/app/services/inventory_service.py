@@ -134,7 +134,7 @@ def reserve_stock(db: Session, order_items: List[OrderItem], user_id: int) -> Li
         available = get_available_quantity(item)
         if available < oi.quantity_ordered:
             errors.append(
-                f"Item {item.erp_code} ({item.name}): need {oi.quantity_ordered}, "
+                f"Item {item.sku} ({item.name}): need {oi.quantity_ordered}, "
                 f"available {available}"
             )
             continue
@@ -193,7 +193,7 @@ def dispatch_stock(
 
         if dispatch_qty > oi.quantity_reserved:
             errors.append(
-                f"Item {item.erp_code}: cannot dispatch {dispatch_qty}, "
+                f"Item {item.sku}: cannot dispatch {dispatch_qty}, "
                 f"only {oi.quantity_reserved} reserved"
             )
             continue

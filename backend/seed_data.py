@@ -249,12 +249,12 @@ def seed_inventory_items():
         ("Bar Mat - Rubber", "ERP-005", "8901234567894", "returnable", 200, 25, bins[4].id if len(bins) > 4 else None),
     ]
     
-    for name, erp_code, barcode, item_type, quantity, min_qty, bin_id in items_list:
-        item = db.query(InventoryItem).filter(InventoryItem.erp_code == erp_code).first()
+    for name, sku_code, barcode, item_type, quantity, min_qty, bin_id in items_list:
+        item = db.query(InventoryItem).filter(InventoryItem.sku == sku_code).first()
         if not item:
             item = InventoryItem(
                 name=name,
-                erp_code=erp_code,
+                sku=sku_code,
                 barcode=barcode,
                 qr_code_data=barcode,
                 category_id=promo_cat.id if promo_cat else None,

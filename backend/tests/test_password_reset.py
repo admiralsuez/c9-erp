@@ -5,7 +5,7 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
-from app.core.database import SessionLocal, engine, Base
+from app.core.database import SessionLocal, engine, Base, get_db
 from app.models import User, Role, Permission, RolePermission, PasswordResetToken
 from app.core.auth import hash_password, create_password_reset_token, verify_password_reset_token, mark_password_reset_token_used
 from main import app
@@ -39,7 +39,7 @@ def client(db_session):
     def override_get_db():
         yield db_session
     
-    app.dependency_overrides[lambda: SessionLocal()] = override_get_db
+    app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

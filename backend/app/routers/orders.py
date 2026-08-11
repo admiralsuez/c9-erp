@@ -94,7 +94,15 @@ def generate_order_number(db: Session, settings_format: str, location: str = "HO
     
     seq = count + 1 + attempt  # attempt offset prevents duplicate sequence on retry
     
-    return f"{prefix}-{year}-{seq:03d}"
+    # Apply settings format template (e.g. "ORD-{YYYY}-{SEQ}"), prefixing with location
+    if not settings_format:
+        settings_format = "ORD-{YYYY}-{SEQ}"
+    formatted = (
+        settings_format.replace("{YYYY}", str(year))
+        .replace("{YEAR}", str(year))
+        .replace("{SEQ}", f"{seq:03d}")
+    )
+    return f"{prefix}-{formatted}"
 
 
 def add_timeline_entry(db: Session, order: Order, action: str, user: User, comments: str = None):

@@ -188,7 +188,7 @@ class TestVendorPortalMagicLink:
         assert "magic link" in resp.json()["message"].lower()
 
     def test_verify_without_request_returns_401(self, client: TestClient):
-        resp = client.post("/vendor-portal/verify-magic-link?token=invalid-token")
+        resp = client.get("/vendor-portal/verify-magic-link?token=invalid-token")
         assert resp.status_code == 401
 
     def test_magic_link_full_flow(self, client: TestClient, db_session: Session):
@@ -205,7 +205,7 @@ class TestVendorPortalMagicLink:
             settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM,
         )
 
-        resp = client.post(f"/vendor-portal/verify-magic-link?token={magic_link_jwt}")
+        resp = client.get(f"/vendor-portal/verify-magic-link?token={magic_link_jwt}")
         assert resp.status_code == 200
         data = resp.json()
         assert "vendor_token" in data
@@ -217,10 +217,13 @@ class TestVendorPortalMagicLink:
         resp = client.get("/vendor-portal/dashboard", headers=auth_header)
         assert resp.status_code == 200
 
-    def test_magic_link_disabled_vendor_returns_401(self, client: TestClient, db_session: Session):
+    def test_magic_link_disabled_vendor_returns_generic_response(self, client: TestClient, db_session: Session):
+        """Disabled vendors must not receive a magic link, and must not be
+        distinguishable from unknown emails (anti-enumeration)."""
         create_test_vendor(db_session, email="no_portal@test.com", allow_portal=False)
         resp = client.post("/vendor-portal/request-magic-link?email=no_portal@test.com")
-        assert resp.status_code == 401
+        assert resp.status_code == 200
+        assert "magic link" in resp.json()["message"].lower()
 
 
 class TestEdgeCases:

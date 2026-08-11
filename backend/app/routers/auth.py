@@ -14,36 +14,35 @@ from app.schemas import LoginRequest, TokenResponse, RefreshTokenRequest, UserRe
 from app.services.email_service import get_email_service
 from app.services.email_templates import DEFAULT_EMAIL_TEMPLATES
 from app.core.config import settings
-from collections import defaultdict
+from app.services.rate_limiter import rate_limiter, RateLimitExceeded
 import hashlib
-import time
 import logging
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = logging.getLogger(__name__)
 
-# Simple in-memory rate limiter (per IP)
-_login_attempts: dict = defaultdict(list)
-LOGIN_RATE_LIMIT = 10  # max attempts
-LOGIN_RATE_WINDOW = 300  # seconds (5 min)
-
 
 def _check_login_rate_limit(ip: str):
-    now = time.time()
-    window_start = now - LOGIN_RATE_WINDOW
-    _login_attempts[ip] = [t for t in _login_attempts[ip] if t > window_start]
-    if len(_login_attempts[ip]) >= LOGIN_RATE_LIMIT:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many login attempts. Try again in {LOGIN_RATE_WINDOW // 60} minutes."
-        )
-    _login_attempts[ip].append(now)
+    """Enforce login attempt limit per IP (sliding window)."""
+    allowed, retry_after = rate_limiter.check(
+        f"login:{ip}", settings.RATE_LIMIT_LOGIN_LIMIT, settings.RATE_LIMIT_LOGIN_WINDOW
+    )
+    if not allowed:
+        raise RateLimitExceeded(settings.RATE_LIMIT_LOGIN_LIMIT, retry_after, scope="login")
+
+
+def _check_password_reset_rate_limit(email: str):
+    """Enforce password-reset request limit per email (sliding window)."""
+    allowed, retry_after = rate_limiter.check(
+        f"reset:{email}", settings.RATE_LIMIT_RESET_LIMIT, settings.RATE_LIMIT_RESET_WINDOW
+    )
+    if not allowed:
+        raise RateLimitExceeded(settings.RATE_LIMIT_RESET_LIMIT, retry_after, scope="password_reset")
 
 
 @router.post("/login", response_model=TokenResponse)
 def login(request: LoginRequest, http_request: Request, db: Session = Depends(get_db)):
     """Login with email and password, return access + refresh tokens."""
-    print("reached herrrrrrrrrrrrrrrrrrrrrrrrrrrrrr")
     ip = http_request.client.host if http_request.client else "unknown"
     _check_login_rate_limit(ip)
     
@@ -199,7 +198,9 @@ def request_password_reset(
 ):
     """Request a password reset token via email."""
     ip = http_request.client.host if http_request.client else "unknown"
-    
+
+    _check_password_reset_rate_limit(request.email)
+
     # Find user by email
     user = db.query(User).filter(
         User.email == request.email,
@@ -283,14 +284,17 @@ def reset_password(
     # Create new access tokens for automatic login
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(user.id, db)
-    
+
     logger.info("PASSWORD RESET successful for %s from %s", user.email, ip)
     log_audit(db, user_id=user.id, action="password_reset_completed", 
               entity_type="user", entity_id=user.id, ip_address=ip)
+    
+    user_data = UserResponse.model_validate(user)
     
     return {
         "message": "Password reset successful. You are now logged in.",
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "user": user_data
     }

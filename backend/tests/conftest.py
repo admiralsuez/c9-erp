@@ -24,12 +24,12 @@ from app.models import (
 )
 from decimal import Decimal
 from app.core.auth import hash_password, create_access_token
-from app.routers.auth import _login_attempts
+from app.services.rate_limiter import rate_limiter
 
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
-    _login_attempts.clear()
+    rate_limiter.reset()
 
 
 @pytest.fixture(scope="session")
@@ -47,6 +47,7 @@ def test_engine():
 @pytest.fixture(autouse=True)
 def clean_db(test_engine):
     """Clean all data between tests (keep schema)."""
+    Base.metadata.create_all(bind=test_engine)
     with test_engine.connect() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             conn.execute(table.delete())

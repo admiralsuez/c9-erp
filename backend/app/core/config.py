@@ -50,6 +50,17 @@ class Settings(BaseSettings):
     JWT_EXPIRATION_HOURS: int = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
     REFRESH_TOKEN_EXPIRATION_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRATION_DAYS", "30"))
 
+    # Rate limiting (per window, in seconds)
+    RATE_LIMIT_ENABLED: bool = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+    RATE_LIMIT_LOGIN_LIMIT: int = int(os.getenv("RATE_LIMIT_LOGIN_LIMIT", "5"))  # per minute per IP
+    RATE_LIMIT_LOGIN_WINDOW: int = int(os.getenv("RATE_LIMIT_LOGIN_WINDOW", "60"))
+    RATE_LIMIT_RESET_LIMIT: int = int(os.getenv("RATE_LIMIT_RESET_LIMIT", "3"))  # per hour per email
+    RATE_LIMIT_RESET_WINDOW: int = int(os.getenv("RATE_LIMIT_RESET_WINDOW", "3600"))
+    RATE_LIMIT_API_LIMIT: int = int(os.getenv("RATE_LIMIT_API_LIMIT", "100"))  # per minute per user
+    RATE_LIMIT_API_WINDOW: int = int(os.getenv("RATE_LIMIT_API_WINDOW", "60"))
+    RATE_LIMIT_PUBLIC_LIMIT: int = int(os.getenv("RATE_LIMIT_PUBLIC_LIMIT", "500"))  # per minute per IP
+    RATE_LIMIT_PUBLIC_WINDOW: int = int(os.getenv("RATE_LIMIT_PUBLIC_WINDOW", "60"))
+
     # DigitalOcean Spaces (S3-compatible)
     DO_SPACES_KEY: str = os.getenv("DO_SPACES_KEY", "")
     DO_SPACES_SECRET: str = os.getenv("DO_SPACES_SECRET", "")

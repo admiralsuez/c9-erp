@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, Request, HTTPException as FastAPIHTTPException
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from app.core.database import engine, Base
 from app.core.config import settings
+from app.core.error_handler import register_exception_handlers
+from app.services.rate_limiter import RateLimitMiddleware
 from app import models
 from fastapi.staticfiles import StaticFiles
 import asyncio
@@ -159,6 +160,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global rate limiting middleware (enforced before request handling)
+app.add_middleware(RateLimitMiddleware)
+
 # Sensitive paths — never log request bodies for these
 _SENSITIVE_PATHS = ["/auth", "/vendor-portal", "/backup"]
 
@@ -223,28 +227,8 @@ async def log_requests(request: Request, call_next):
 
     return response
 
-# Global exception handler
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    client = request.client.host if request.client else "unknown"
-    if isinstance(exc, FastAPIHTTPException):
-        logger.warning(
-            f"HTTP {exc.status_code} | {request.method} {request.url.path} "
-            f"from {client} | {exc.detail}"
-        )
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.detail},
-        )
-    logger.error(
-        f"UNHANDLED | {request.method} {request.url.path} "
-        f"from {client} | {exc}",
-        exc_info=True
-    )
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"},
-    )
+# Global exception handlers - standardized error response format
+register_exception_handlers(app)
 
 # Health check
 @app.get("/health", tags=["Health"])

@@ -480,6 +480,8 @@ class OrderItem(Base):
     quantity_dispatched = Column(Numeric(12, 2), default=0, nullable=False)
     quantity_returned = Column(Numeric(12, 2), default=0, nullable=False)
     quantity_damaged = Column(Numeric(12, 2), default=0, nullable=False)
+    return_reason = Column(String(50), nullable=True)  # damaged | not_needed | null
+    return_status = Column(String(50), nullable=True)  # pending | completed
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     
     order = relationship("Order", back_populates="items")
@@ -538,6 +540,7 @@ class Document(Base):
     version = Column(Integer, default=1, nullable=False)
     parent_document_id = Column(Integer, ForeignKey("documents.id"))  # version chain
     version_status = Column(String(20), default="current", nullable=False)  # current | superseded
+    challan_book_number = Column(String(50), nullable=True)  # challan book number for delivery challan
     notes = Column(Text)
     uploaded_by = Column(Integer, ForeignKey("users.id"))
     uploaded_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)

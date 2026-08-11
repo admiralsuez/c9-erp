@@ -306,6 +306,156 @@ class PDFGenerator:
             logger.error("Failed to create small style: %s", str(e))
             return None
     
+    def generate_delivery_challan(
+        self,
+        order_number: str,
+        vendor_name: str,
+        items: list,
+        challan_book_number: str = "",
+        requested_by: str = "",
+        company_address: str = "",
+        header_text: str = "",
+        footer_text: str = "",
+        dispatch_signature_base64: str = ""  # Dispatcher signature
+    ) -> bytes:
+        """
+        Generate a delivery challan PDF.
+        
+        Args:
+            order_number: Order number
+            vendor_name: Vendor name
+            items: List of dicts with {name, sku, quantity_dispatched}
+            challan_book_number: Challan book number
+            requested_by: Name of requesting user
+            company_address: Company address
+            header_text: Header text from settings
+            footer_text: Footer text from settings
+            dispatch_signature_base64: Base64-encoded dispatcher signature
+            
+        Returns:
+            PDF as bytes
+        """
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib.units import inch
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+            from reportlab.lib import colors
+            from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+        except ImportError:
+            return self._generate_stub_pdf(order_number)
+        
+        # Create PDF in memory
+        pdf_buffer = BytesIO()
+        doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=0.4*inch, leftMargin=0.4*inch)
+        
+        story = []
+        
+        # Header with company info
+        story.append(Paragraph(f"<b>{self.company_name}</b>", self._header_style()))
+        story.append(Paragraph(company_address, self._small_style()))
+        story.append(Spacer(1, 0.1*inch))
+        
+        if header_text:
+            story.append(Paragraph(header_text, self._small_style()))
+            story.append(Spacer(1, 0.05*inch))
+        
+        # Title
+        story.append(Paragraph("DELIVERY CHALLAN", self._title_style()))
+        story.append(Spacer(1, 0.1*inch))
+        
+        # Challan details
+        details_data = [
+            ["Order #:", order_number, "Date:", datetime.now().strftime("%Y-%m-%d")],
+        ]
+        if challan_book_number:
+            details_data.append(["Challan Book #:", challan_book_number, "Vendor:", vendor_name])
+        else:
+            details_data.append(["Vendor:", vendor_name, "Requested By:", requested_by])
+        
+        details_table = Table(details_data, colWidths=[1*inch, 2.5*inch, 1*inch, 2.5*inch])
+        details_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        story.append(details_table)
+        story.append(Spacer(1, 0.1*inch))
+        
+        # Items table
+        story.append(Paragraph("<b>Dispatched Items</b>", self._body_style()))
+        items_data = [["#", "SKU / Description", "Qty"]]
+        for idx, item in enumerate(items, 1):
+            desc = str(item.get("name", ""))
+            sku = str(item.get("sku", ""))
+            if sku:
+                desc = f"{sku} - {desc}"
+            items_data.append([
+                str(idx),
+                desc,
+                str(item.get("quantity_dispatched", ""))
+            ])
+        
+        items_table = Table(items_data, colWidths=[0.4*inch, 4.3*inch, 1*inch])
+        items_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ]))
+        story.append(items_table)
+        story.append(Spacer(1, 0.15*inch))
+        
+        # Signature section - auto-populate dispatcher signature if available
+        story.append(Paragraph("<b>Dispatch Authorization</b>", self._body_style()))
+        
+        signature_data = [
+            ["Prepared By:", "_____________________", f"Date: {datetime.now().strftime('%Y-%m-%d')}"],
+        ]
+        
+        try:
+            from reportlab.platypus import Image as RLImage
+            import base64
+            if dispatch_signature_base64:
+                sig_bytes = base64.b64decode(dispatch_signature_base64.split(",")[-1])
+                sig_buffer = BytesIO(sig_bytes)
+                sig_image = RLImage(sig_buffer, width=2*inch, height=0.5*inch)
+                signature_data.append(["Dispatcher Signature:", sig_image, ""])
+            else:
+                signature_data.append(["Dispatcher Signature:", "_____________________", ""])
+        except Exception:
+            signature_data.append(["Dispatcher Signature:", "_____________________", ""])
+        
+        signature_data.append(["", "", ""])
+        signature_data.append(["Received By:", "_____________________", "Date: __________"])
+        
+        sig_table = Table(signature_data, colWidths=[1.5*inch, 2.5*inch, 1.5*inch])
+        sig_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ]))
+        story.append(sig_table)
+        
+        # Footer
+        story.append(Spacer(1, 0.3*inch))
+        if footer_text:
+            story.append(Paragraph(footer_text, self._small_style()))
+        
+        # Build PDF
+        doc.build(story)
+        pdf_buffer.seek(0)
+        return pdf_buffer.getvalue()
+    
     def _generate_stub_pdf(self, order_number: str) -> bytes:
         """Generate a stub PDF when reportlab is not available."""
         # Return minimal PDF-like content for testing

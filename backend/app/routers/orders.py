@@ -64,16 +64,34 @@ VALID_TRANSITIONS = {
 }
 
 
-def generate_order_number(db: Session, settings_format: str, location: str = "HO", attempt: int = 0) -> str:
-    """Generate unique order number using location-based prefix (HO/LLF)."""
-    year = datetime.now(timezone.utc).year
+def generate_order_number(db: Session, settings_format: str, location: str = "HO", attempt: int = 0, custom_date: datetime = None) -> str:
+    """Generate unique order number using location-based prefix (HO/LLF).
+    
+    Args:
+        db: Database session
+        settings_format: Format string
+        location: Location (HO/LLF)
+        attempt: Retry attempt number
+        custom_date: Optional custom date for order number generation (for backdate)
+    """
+    if custom_date:
+        year = custom_date.year
+    else:
+        year = datetime.now(timezone.utc).year
     
     settings = db.query(Settings).first()
     prefix = (settings.llf_prefix if location == "LLF" else settings.ho_prefix) if settings else ("LLF" if location == "LLF" else "HO")
     
-    count = db.query(func.count(Order.id)).filter(
-        func.extract('year', Order.created_at) == year
-    ).scalar() or 0
+    # Count orders for the given year
+    if custom_date:
+        count = db.query(func.count(Order.id)).filter(
+            func.extract('year', Order.created_at) == year
+        ).scalar() or 0
+    else:
+        count = db.query(func.count(Order.id)).filter(
+            func.extract('year', Order.created_at) == year
+        ).scalar() or 0
+    
     seq = count + 1 + attempt  # attempt offset prevents duplicate sequence on retry
     
     return f"{prefix}-{year}-{seq:03d}"
@@ -262,10 +280,28 @@ def create_order(
                     detail=f"One or more serials for '{item.name}' are already assigned or don't belong to this item"
                 )
     
+    # Validate backdate if provided
+    order_created_at = datetime.now(timezone.utc)
+    if order_data.order_date:
+        from datetime import timedelta
+        backdate = order_data.order_date
+        # Validate backdate is not more than 30 days in the past
+        if backdate > order_created_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Order date cannot be in the future"
+            )
+        if order_created_at - backdate > timedelta(days=30):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Order date cannot be more than 30 days in the past"
+            )
+        order_created_at = backdate
+    
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            order_number = generate_order_number(db, "ORD-{YYYY}-{SEQ}", current_user.location or "HO", attempt)
+            order_number = generate_order_number(db, "ORD-{YYYY}-{SEQ}", current_user.location or "HO", attempt, order_created_at)
 
             # Create order
             order = Order(
@@ -274,7 +310,8 @@ def create_order(
                 status=OrderStatus.DRAFT,
                 remarks=order_data.remarks,
                 delivery_address=order_data.delivery_address,
-                created_by=current_user.id
+                created_by=current_user.id,
+                created_at=order_created_at  # Use backdate if provided
             )
             db.add(order)
             db.flush()
@@ -1454,6 +1491,183 @@ def download_order_pdf(
         path=tmp.name,
         media_type="application/pdf",
         filename=f"{order.order_number}_requisition.pdf"
+    )
+
+
+@router.post("/{order_id}/items/{order_item_id}/return-reason")
+def set_order_item_return_reason(
+    order_id: int,
+    order_item_id: int,
+    body: dict = Body(..., embed=False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("orders.manage"))
+):
+    """Set return reason for a consumable order item (damaged or not_needed)."""
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.deleted_at == None
+    ).first()
+    
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    
+    order_item = db.query(OrderItem).filter(
+        OrderItem.id == order_item_id,
+        OrderItem.order_id == order_id
+    ).first()
+    
+    if not order_item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order item not found")
+    
+    # Get inventory item to check if consumable
+    item = db.query(InventoryItem).filter(InventoryItem.id == order_item.item_id).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
+    
+    # Validate return reason
+    return_reason = body.get("return_reason", "")
+    if return_reason not in ["damaged", "not_needed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="return_reason must be 'damaged' or 'not_needed'"
+        )
+    
+    # Update return reason and status
+    order_item.return_reason = return_reason
+    order_item.return_status = "pending"  # Mark as pending return
+    
+    db.commit()
+    db.refresh(order_item)
+    
+    return OrderItemResponse.model_validate(order_item)
+
+
+@router.get("/{order_id}/download-challan")
+def download_delivery_challan(
+    order_id: int,
+    include_signature: bool = Query(True),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Download delivery challan PDF for dispatched/delivered/closed orders."""
+    import os as _os
+    from fastapi.responses import FileResponse as FastFileResponse
+    import tempfile
+    
+    order = db.query(Order).options(
+        selectinload(Order.items).selectinload(OrderItem.item),
+        joinedload(Order.vendor),
+    ).filter(
+        Order.id == order_id,
+        Order.deleted_at == None
+    ).first()
+    
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    
+    # Allow challan download for dispatched, delivered, or closed orders
+    if order.status not in ("dispatched", "delivered", "closed"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot generate challan for order in {order.status} status"
+        )
+    
+    tmp_paths = []
+    
+    # Check for existing delivery challan document
+    challan_doc = db.query(Document).filter(
+        Document.order_id == order.id,
+        Document.doc_category == "delivery_challan",
+        Document.version_status == "current"
+    ).order_by(Document.version.desc()).first()
+    
+    if challan_doc:
+        try:
+            storage = get_storage_backend()
+            pdf_data = storage.read(challan_doc.storage_path)
+            if pdf_data:
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+                tmp.write(pdf_data)
+                tmp.close()
+                tmp_paths.append(tmp.name)
+                if background_tasks:
+                    for p in tmp_paths:
+                        background_tasks.add_task(_os.unlink, p)
+                return FastFileResponse(
+                    path=tmp.name,
+                    media_type="application/pdf",
+                    filename=f"{order.order_number}_delivery_challan.pdf"
+                )
+        except Exception as e:
+            logger.warning("Could not load existing challan PDF for order %s, regenerating: %s", order_id, str(e))
+    
+    # Generate challan PDF
+    items = [
+        {
+            "name": oi.item.name if oi.item else f"Item #{oi.item_id}",
+            "sku": oi.item.sku if oi.item else "",
+            "quantity_dispatched": str(oi.quantity_dispatched),
+            "description": oi.item.description if oi.item else "",
+        }
+        for oi in order.items
+    ]
+    
+    settings = db.query(Settings).first()
+    creator = db.query(User).filter(User.id == order.created_by).first()
+    
+    # Get dispatcher signature if available and requested
+    dispatcher_name = None
+    dispatcher_signature_base64 = None
+    if include_signature:
+        # Get user who dispatched the order
+        dispatch_entry = db.query(OrderTimeline).filter(
+            OrderTimeline.order_id == order.id,
+            OrderTimeline.action == "dispatched"
+        ).order_by(OrderTimeline.id.desc()).first()
+        
+        if dispatch_entry:
+            dispatcher = db.query(User).options(
+                selectinload(User.signature)
+            ).filter(User.id == dispatch_entry.user_id).first()
+            if dispatcher:
+                dispatcher_name = dispatcher.full_name or dispatcher.email
+                if dispatcher.signature and dispatcher.signature.signature_data:
+                    dispatcher_signature_base64 = dispatcher.signature.signature_data
+    
+    # Get challan book number from existing document if available
+    challan_book_number = challan_doc.challan_book_number if challan_doc else ""
+    
+    pdf_gen = PDFGenerator(
+        company_name=settings.company_name if settings else "Cloud9",
+        logo_url=settings.company_logo_url if settings else None
+    )
+    
+    pdf_bytes = pdf_gen.generate_delivery_challan(
+        order_number=order.order_number,
+        vendor_name=order.vendor.name if order.vendor else "Unknown",
+        items=items,
+        challan_book_number=challan_book_number,
+        requested_by=creator.full_name if creator else "Unknown",
+        company_address=settings.company_address if settings else "",
+        header_text=settings.pdf_header_text if settings else "",
+        footer_text=settings.pdf_footer_text if settings else "",
+        dispatch_signature_base64=dispatcher_signature_base64,
+    )
+    
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    tmp.write(pdf_bytes)
+    tmp.close()
+    tmp_paths.append(tmp.name)
+    
+    if background_tasks:
+        for p in tmp_paths:
+            background_tasks.add_task(_os.unlink, p)
+    
+    return FastFileResponse(
+        path=tmp.name,
+        media_type="application/pdf",
+        filename=f"{order.order_number}_delivery_challan.pdf"
     )
 
 

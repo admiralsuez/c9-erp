@@ -485,6 +485,8 @@ class OrderItemResponse(BaseModel):
     quantity_dispatched: float
     quantity_returned: float = 0
     quantity_damaged: float = 0
+    return_reason: Optional[str] = None  # damaged | not_needed
+    return_status: Optional[str] = None  # pending | completed
     created_at: datetime
     item: Optional['InventoryItemResponse'] = None
     serial_ids: Optional[List[int]] = []
@@ -509,6 +511,7 @@ class OrderCreateRequest(BaseModel):
     items: List[OrderItemCreateRequest]
     remarks: Optional[str] = None
     delivery_address: Optional[str] = None
+    order_date: Optional[datetime] = None  # Optional backdate for order
 
 
 class OrderUpdateRequest(BaseModel):
@@ -603,6 +606,7 @@ class ApprovalRuleResponse(BaseModel):
 # ============ PHASE 3: DOCUMENTS ============
 class DocumentUploadRequest(BaseModel):
     doc_category: str  # requisition | signed_requisition | other
+    challan_book_number: Optional[str] = None  # challan book number for delivery challan
     notes: Optional[str] = None
 
 
@@ -615,6 +619,7 @@ class DocumentResponse(BaseModel):
     version: int
     parent_document_id: Optional[int] = None
     version_status: str  # current | superseded
+    challan_book_number: Optional[str] = None  # challan book number for delivery challan
     notes: Optional[str] = None
     uploaded_by: Optional[int] = None
     uploaded_at: datetime

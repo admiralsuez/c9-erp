@@ -14,6 +14,7 @@ import {
   useDeleteInventoryItem,
   useRestockItem,
   useAdjustItem,
+  useUpdateStockStatus,
 } from '../../hooks/useInventory';
 import { useUserNameMap } from '../../hooks/useUsers';
 
@@ -37,6 +38,7 @@ export const InventoryDetailPage: React.FC = () => {
   const { mutate: deleteItem, isPending: isDeleting } = useDeleteInventoryItem();
   const { mutate: restockItem, isPending: isRestocking } = useRestockItem();
   const { mutate: adjustItem, isPending: isAdjusting } = useAdjustItem();
+  const { mutate: updateStockStatus, isPending: isUpdatingStatus } = useUpdateStockStatus();
   const userNames = useUserNameMap();
 
   const [isEditMode, setIsEditMode] = useState(false);
@@ -209,6 +211,24 @@ export const InventoryDetailPage: React.FC = () => {
               SKU: {item.sku}
               {item.barcode && <span className="ml-3">Barcode: {item.barcode}</span>}
             </p>
+            <div className="mt-3 flex items-center gap-2">
+              <label className="text-sm font-medium text-neutral-700">Stock Status</label>
+              <select
+                value={item.stock_status || 'active'}
+                onChange={(e) => {
+                  if (!itemId) return;
+                  updateStockStatus({ itemId, stock_status: e.target.value }, {
+                    onError: (err: any) => setFormError(getApiError(err, 'Failed to update stock status')),
+                  });
+                }}
+                disabled={isUpdatingStatus}
+                className="px-3 py-1.5 border border-neutral-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+              >
+                <option value="active">Active</option>
+                <option value="expired">Expired</option>
+                <option value="damaged">Damaged</option>
+              </select>
+            </div>
           </div>
         </div>
         {!isEditMode && (

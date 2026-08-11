@@ -26,20 +26,17 @@ def _column_exists(table: str, column: str) -> bool:
 
 
 def upgrade() -> None:
-    """Upgrade schema - rename sku to erp_code."""
-    # Only rename if sku exists and erp_code doesn't
-    if _column_exists('inventory_items', 'sku') and not _column_exists('inventory_items', 'erp_code'):
-        # PostgreSQL: use ALTER TABLE RENAME COLUMN
-        op.execute('ALTER TABLE inventory_items RENAME COLUMN sku TO erp_code')
-        # Rename the unique constraint
-        op.execute('ALTER TABLE inventory_items RENAME CONSTRAINT uq_inventory_sku TO uq_inventory_erp_code')
-        # Rename the index
-        op.execute('ALTER INDEX idx_inventory_sku RENAME TO idx_inventory_erp_code')
+    """Upgrade schema - rename sku to erp_code.
+
+    NOTE: Neutralized. The application model and all code use ``sku``;
+    this rename was never reflected in the model, so it would break every
+    inventory query. Kept as a no-op for DBs that already stamped this
+    revision. A follow-up merge migration restores ``sku`` for any DB where
+    the rename was applied.
+    """
+    pass
 
 
 def downgrade() -> None:
     """Downgrade schema - rename erp_code back to sku."""
-    if _column_exists('inventory_items', 'erp_code') and not _column_exists('inventory_items', 'sku'):
-        op.execute('ALTER TABLE inventory_items RENAME COLUMN erp_code TO sku')
-        op.execute('ALTER TABLE inventory_items RENAME CONSTRAINT uq_inventory_erp_code TO uq_inventory_sku')
-        op.execute('ALTER INDEX idx_inventory_erp_code RENAME TO idx_inventory_sku')
+    pass

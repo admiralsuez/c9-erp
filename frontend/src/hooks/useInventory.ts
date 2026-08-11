@@ -80,6 +80,21 @@ export const useDeleteInventoryItem = () => {
   });
 };
 
+export const useUpdateStockStatus = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ itemId, stock_status }: { itemId: number; stock_status: string }) =>
+      inventoryApi.updateStockStatus(itemId, stock_status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['inventory-item'], exact: false });
+      toast.success('Stock status updated');
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to update stock status'),
+  });
+};
+
 export const useInventoryByBarcode = (barcode: string | null) => {
   return useQuery({
     queryKey: ['inventory-barcode', barcode],

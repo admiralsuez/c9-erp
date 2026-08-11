@@ -24,6 +24,7 @@ export interface InventoryItemResponse {
   parent_id?: number;
   children?: InventoryItemResponse[];
   is_active: boolean;
+  stock_status?: string;
   created_at: string;
   updated_at: string;
   deleted_at?: string;
@@ -180,6 +181,14 @@ export const inventoryApi = {
 
   delete: async (itemId: number): Promise<void> => {
     await apiClient.delete(`/inventory/items/${itemId}`);
+  },
+
+  updateStockStatus: async (itemId: number, stock_status: string): Promise<InventoryItemResponse> => {
+    const response = await apiClient.patch<InventoryItemResponse>(
+      `/inventory/items/${itemId}/stock-status`,
+      { stock_status }
+    );
+    return response.data;
   },
 
   getByBarcode: async (barcode: string): Promise<InventoryItemResponse> => {

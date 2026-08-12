@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import List
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, status, UploadFile
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.auth import get_current_user, require_permission
@@ -33,6 +33,10 @@ from app.services.audit_service import log_audit
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 logger = logging.getLogger(__name__)
+
+_ALLOWED_PHOTO_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "static", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.get("/categories", response_model=List[InventoryCategoryResponse])
 def list_categories(

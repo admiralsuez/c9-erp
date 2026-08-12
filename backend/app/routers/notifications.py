@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.orm import Session, joinedload
 from app.core.database import get_db
 from app.core.auth import get_current_user
 from app.models import User, Notification
 from app.schemas import NotificationResponse
+from app.services.validators import require_found
 from typing import List
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -76,11 +77,8 @@ def mark_notification_read(
     ).first()
     
     if not notification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification not found"
-        )
-    
+        require_found(notification, "Notification", notification_id)
+
     notification.is_read = True
     db.commit()
 

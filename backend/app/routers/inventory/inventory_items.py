@@ -1,35 +1,38 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
-from app.core.database import get_db
-from app.core.auth import get_current_user, require_permission
-from app.models import (
-    User, InventoryItem, InventoryItemAttribute, InventoryCategory, InventoryTransaction,
-    WarehouseBin, InventoryItemImage
-)
-from sqlalchemy.orm import selectinload
-from app.services.audit_service import log_audit
-from app.services.inventory_service import restock_item as svc_restock, adjust_item as svc_adjust
-from app.services.storage import get_storage_backend
-from app.schemas import (
-    InventoryCategoryCreate, InventoryCategoryResponse,
-    InventoryItemCreate, InventoryItemUpdate, InventoryItemResponse,
-    InventoryItemDetailResponse, InventoryItemBatchCreate,
-    InventoryItemImageResponse, InventoryItemImageCreate,
-    RestockRequest, AdjustmentRequest,
-    InventoryTransactionResponse
-)
-from typing import List
-from decimal import Decimal
-from datetime import datetime, timezone
-import os
 import logging
+import os
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import List
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, status, UploadFile
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, selectinload
+
+from app.core.auth import get_current_user, require_permission
+from app.core.database import get_db
+from app.models import (
+    InventoryCategory,
+    InventoryItem,
+    InventoryItemAttribute,
+    InventoryItemImage,
+    InventoryTransaction,
+    User,
+    WarehouseBin,
+)
+from app.schemas import (
+    InventoryCategoryCreate,
+    InventoryCategoryResponse,
+    InventoryItemBatchCreate,
+    InventoryItemCreate,
+    InventoryItemDetailResponse,
+    InventoryItemImageResponse,
+    InventoryItemResponse,
+    InventoryItemUpdate,
+)
+from app.services.audit_service import log_audit
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 logger = logging.getLogger(__name__)
-
-
-# ============ INVENTORY CATEGORIES ============
 
 @router.get("/categories", response_model=List[InventoryCategoryResponse])
 def list_categories(
@@ -39,8 +42,6 @@ def list_categories(
     """List all inventory categories."""
     categories = db.query(InventoryCategory).all()
     return categories
-
-
 @router.post("/categories", response_model=InventoryCategoryResponse, status_code=status.HTTP_201_CREATED)
 def create_category(
     category_data: InventoryCategoryCreate,
@@ -67,8 +68,6 @@ def create_category(
     db.commit()
     db.refresh(category)
     return category
-
-
 @router.put("/categories/{category_id}", response_model=InventoryCategoryResponse)
 def update_category(
     category_id: int,
@@ -91,8 +90,6 @@ def update_category(
     db.commit()
     db.refresh(category)
     return category
-
-
 @router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_category(
     category_id: int,
@@ -111,10 +108,6 @@ def delete_category(
         )
     db.delete(category)
     db.commit()
-
-
-# ============ INVENTORY ITEMS ============
-
 @router.get("/items")
 def list_items(
     search: str = Query(None),
@@ -227,8 +220,6 @@ def list_items(
         "size": size,
         "pages": total_pages
     }
-
-
 @router.get("/drafts")
 def list_drafts(
     page: int = Query(1, ge=1),
@@ -273,8 +264,6 @@ def list_drafts(
         "size": size,
         "pages": total_pages
     }
-
-
 @router.post("/items/{item_id}/publish", response_model=InventoryItemResponse)
 def publish_draft(
     item_id: int,
@@ -303,8 +292,6 @@ def publish_draft(
               entity_type="inventory_item", entity_id=item.id)
     
     return item
-
-
 @router.post("/items", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)
 def create_item(
     item_data: InventoryItemCreate,
@@ -449,8 +436,6 @@ def create_item(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create item: {str(e)}"
         )
-
-
 @router.post("/items/batch", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)
 def create_items_batch(
     data: InventoryItemBatchCreate,
@@ -557,8 +542,6 @@ def create_items_batch(
         parent.id, parent.sku, len(data.children), current_user.email
     )
     return parent
-
-
 @router.get("/items/{item_id}", response_model=InventoryItemDetailResponse)
 def get_item(
     item_id: int,
@@ -585,122 +568,6 @@ def get_item(
         )
     
     return item
-
-
-@router.post("/items/{item_id}/adjust-quantity", response_model=InventoryItemResponse)
-def adjust_item_quantity(
-    item_id: int,
-    body: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.edit"))
-):
-    """Adjust item quantity and create transaction record."""
-    item = db.query(InventoryItem).filter(
-        InventoryItem.id == item_id,
-        InventoryItem.deleted_at == None
-    ).first()
-    
-    if not item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Item not found"
-        )
-    
-    quantity_change = body.get("quantity_change", 0)
-    reason = body.get("reason", "Manual adjustment")
-    
-    if not quantity_change:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="quantity_change is required"
-        )
-    
-    try:
-        quantity_change = float(quantity_change)
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="quantity_change must be a number"
-        )
-    
-    previous_qty = item.current_quantity
-    new_qty = previous_qty + Decimal(str(quantity_change))
-    
-    # Prevent negative quantities for consumables
-    if new_qty < 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot reduce quantity below zero"
-        )
-    
-    # Create transaction
-    transaction = InventoryTransaction(
-        item_id=item.id,
-        transaction_type="adjustment",
-        previous_quantity=previous_qty,
-        change_quantity=Decimal(str(quantity_change)),
-        new_quantity=new_qty,
-        reason=reason,
-        created_by=current_user.id
-    )
-    db.add(transaction)
-    
-    # Update item quantity
-    item.current_quantity = new_qty
-    
-    db.commit()
-    db.refresh(item)
-    
-    logger.info(
-        "ADJUSTED item(%d) '%s' qty from %s to %s by %s (reason: %s)",
-        item.id, item.sku, previous_qty, new_qty, current_user.email, reason
-    )
-    
-    return item
-
-
-@router.patch("/items/{item_id}/stock-status", response_model=InventoryItemResponse)
-def update_stock_status(
-    item_id: int,
-    body: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.edit"))
-):
-    """Update item stock status (active | expired | damaged)."""
-    item = db.query(InventoryItem).filter(
-        InventoryItem.id == item_id,
-        InventoryItem.deleted_at == None
-    ).first()
-    
-    if not item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Item not found"
-        )
-    
-    stock_status = body.get("stock_status", "").lower()
-    valid_statuses = ["active", "expired", "damaged"]
-    
-    if stock_status not in valid_statuses:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"stock_status must be one of: {', '.join(valid_statuses)}"
-        )
-    
-    previous_status = item.stock_status
-    item.stock_status = stock_status
-    
-    db.commit()
-    db.refresh(item)
-    
-    logger.info(
-        "UPDATED item(%d) '%s' stock_status from %s to %s by %s",
-        item.id, item.sku, previous_status, stock_status, current_user.email
-    )
-    
-    return item
-
-
 @router.patch("/items/{item_id}", response_model=InventoryItemResponse)
 def update_item(
     item_id: int,
@@ -790,8 +657,6 @@ def update_item(
     db.commit()
     db.refresh(item)
     return item
-
-
 @router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_item(
     item_id: int,
@@ -812,8 +677,6 @@ def delete_item(
     
     item.deleted_at = datetime.now(timezone.utc)
     db.commit()
-
-
 @router.post("/items/{item_id}/restore", response_model=InventoryItemResponse)
 def restore_item(
     item_id: int,
@@ -839,36 +702,6 @@ def restore_item(
     db.commit()
     db.refresh(item)
     return item
-
-
-@router.get("/items/{item_id}/transactions", response_model=List[InventoryTransactionResponse])
-def get_item_transactions(
-    item_id: int,
-    page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get transaction history for an item."""
-    item = db.query(InventoryItem).filter(
-        InventoryItem.id == item_id,
-        InventoryItem.deleted_at == None
-    ).first()
-    
-    if not item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Item not found"
-        )
-    
-    skip = (page - 1) * size
-    transactions = db.query(InventoryTransaction).filter(
-        InventoryTransaction.item_id == item_id
-    ).order_by(InventoryTransaction.created_at.desc()).offset(skip).limit(size).all()
-    
-    return transactions
-
-
 @router.get("/items/barcode/{barcode}", response_model=InventoryItemResponse)
 def get_item_by_barcode(
     barcode: str,
@@ -888,64 +721,6 @@ def get_item_by_barcode(
         )
     
     return item
-
-
-# ============ RESTOCK & ADJUST ============
-
-@router.post("/restock", response_model=InventoryTransactionResponse)
-def restock_item(
-    restock_data: RestockRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.dispatch"))
-):
-    """Restock an item (add to current_quantity via ledger, row-locked)."""
-    item = db.query(InventoryItem).filter(InventoryItem.id == restock_data.item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    if item.parent_id is None:
-        has_children = db.query(InventoryItem).filter(InventoryItem.parent_id == item.id, InventoryItem.deleted_at == None).first() is not None
-        if has_children:
-            raise HTTPException(status_code=400, detail="Cannot restock a parent item. Stock is managed on individual variants.")
-    transaction = svc_restock(
-        db,
-        item_id=restock_data.item_id,
-        quantity=Decimal(str(restock_data.quantity)),
-        reason=restock_data.reason,
-        user_id=current_user.id,
-    )
-    return transaction
-
-
-@router.post("/adjust", response_model=InventoryTransactionResponse)
-def adjust_item(
-    adjust_data: AdjustmentRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.edit"))
-):
-    """Adjust item quantity to a specific value via ledger (row-locked)."""
-    item = db.query(InventoryItem).filter(InventoryItem.id == adjust_data.item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    if item.parent_id is None:
-        has_children = db.query(InventoryItem).filter(InventoryItem.parent_id == item.id, InventoryItem.deleted_at == None).first() is not None
-        if has_children:
-            raise HTTPException(status_code=400, detail="Cannot adjust a parent item. Stock is managed on individual variants.")
-    transaction = svc_adjust(
-        db,
-        item_id=adjust_data.item_id,
-        new_quantity=Decimal(str(adjust_data.new_quantity)),
-        reason=adjust_data.reason,
-        user_id=current_user.id,
-    )
-    return transaction
-
-
-# ============ ITEM PHOTO UPLOAD ============
-
-_ALLOWED_PHOTO_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "static", "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
 @router.post("/items/{item_id}/upload-photo", response_model=InventoryItemImageResponse)
 def upload_item_photo(
     item_id: int,

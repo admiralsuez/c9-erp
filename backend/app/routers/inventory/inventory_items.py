@@ -30,6 +30,7 @@ from app.schemas import (
     InventoryItemUpdate,
 )
 from app.services.audit_service import log_audit
+from app.services.query_optimizer import optimize_inventory_item_query, optimize_inventory_category_query
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 logger = logging.getLogger(__name__)
@@ -187,10 +188,7 @@ def list_items(
     
     skip = (page - 1) * size
     try:
-        items = query.options(
-            selectinload(InventoryItem.children),
-            selectinload(InventoryItem.attributes),
-        ).offset(skip).limit(size).all()
+        items = optimize_inventory_item_query(query).offset(skip).limit(size).all()
     except Exception as e:
         logger.error(f"Error fetching inventory items: {e}")
         return {
@@ -250,7 +248,7 @@ def list_drafts(
     
     total = query.count()
     skip = (page - 1) * size
-    items = query.offset(skip).limit(size).all()
+    items = optimize_inventory_item_query(query).offset(skip).limit(size).all()
     total_pages = (total + size - 1) // size
     
     items_data = []

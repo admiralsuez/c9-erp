@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.models import InventoryItem, Order, OrderItem, SerialNumber, User, Vendor
 from app.schemas import InventoryItemResponse, OrderCreateRequest, OrderResponse, OrderUpdateRequest
 from app.services.serial_number_service import serial_number_service
+from app.services.query_optimizer import optimize_order_query
 
 from .orders_common import OrderStatus, add_timeline_entry, generate_order_number, reserve_stock
 
@@ -216,11 +217,7 @@ def list_orders(
     
     skip = (page - 1) * size
     try:
-        orders = query.options(
-            selectinload(Order.items).selectinload(OrderItem.item),
-            selectinload(Order.timeline_entries),
-            selectinload(Order.vendor),
-        ).offset(skip).limit(size).all()
+        orders = optimize_order_query(query).offset(skip).limit(size).all()
     except Exception as e:
         logger.error(f"Error fetching orders: {e}")
         return {

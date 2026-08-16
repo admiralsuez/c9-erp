@@ -201,3 +201,9 @@ class AdjustmentRequest(BaseModel):
     item_id: int
     new_quantity: float
     reason: str
+
+
+# Rebuild models that use forward references to ensure they can find the classes defined below them
+# This is necessary for Pydantic v2 + FastAPI route registration
+InventoryItemDetailResponse.model_rebuild()
+InventoryItemResponse.model_rebuild()

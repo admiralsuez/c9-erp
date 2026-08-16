@@ -168,6 +168,17 @@ export const inventoryApi = {
     return response.data;
   },
 
+  createChild: async (
+    parentId: number,
+    data: InventoryItemCreateRequest
+  ): Promise<InventoryItemResponse> => {
+    const response = await apiClient.post<InventoryItemResponse>(
+      `/inventory/items/${parentId}/children`,
+      data
+    );
+    return response.data;
+  },
+
   update: async (
     itemId: number,
     data: InventoryItemUpdateRequest

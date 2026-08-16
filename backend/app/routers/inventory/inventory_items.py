@@ -544,6 +544,80 @@ def create_items_batch(
         parent.id, parent.sku, len(data.children), current_user.email
     )
     return parent
+@router.post("/items/{parent_id}/children", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)
+def create_child_item(
+    parent_id: int,
+    child_data: InventoryItemCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.create"))
+):
+    """Create a single child item for an existing parent item."""
+    # Verify parent exists
+    parent = db.query(InventoryItem).filter(
+        InventoryItem.id == parent_id,
+        InventoryItem.deleted_at == None
+    ).first()
+    if not parent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Parent item not found"
+        )
+    
+    # Check SKU uniqueness
+    existing_sku = db.query(InventoryItem).filter(
+        InventoryItem.sku == child_data.sku
+    ).first()
+    if existing_sku:
+        raise HTTPException(status_code=409, detail=f"SKU '{child_data.sku}' already exists")
+    
+    # Check barcode uniqueness if provided
+    if child_data.barcode:
+        existing_bc = db.query(InventoryItem).filter(
+            InventoryItem.barcode == child_data.barcode
+        ).first()
+        if existing_bc:
+            raise HTTPException(status_code=409, detail=f"Barcode '{child_data.barcode}' already exists")
+    
+    # Create child item
+    child = InventoryItem(
+        name=child_data.name,
+        sku=child_data.sku,
+        barcode=child_data.barcode,
+        qr_code_data=child_data.barcode,
+        parent_id=parent_id,
+        item_type=child_data.item_type,
+        current_quantity=Decimal(str(child_data.current_quantity or 0)),
+        reserved_quantity=Decimal("0"),
+        minimum_quantity=Decimal(str(child_data.minimum_quantity or 0)),
+        description=child_data.description,
+        image_url=child_data.image_url,
+    )
+    db.add(child)
+    db.flush()
+    
+    # Create opening balance transaction if quantity > 0
+    if child_data.current_quantity and child_data.current_quantity > 0:
+        transaction = InventoryTransaction(
+            item_id=child.id,
+            transaction_type="opening_balance",
+            previous_quantity=Decimal("0"),
+            change_quantity=Decimal(str(child_data.current_quantity)),
+            new_quantity=Decimal(str(child_data.current_quantity)),
+            reference_type=None,
+            reference_id=None,
+            reason="Opening balance",
+            created_by=current_user.id
+        )
+        db.add(transaction)
+    
+    db.commit()
+    db.refresh(child)
+    logger.info(
+        "CREATED child(%d) '%s' for parent(%d) by %s",
+        child.id, child.sku, parent_id, current_user.email
+    )
+    return child
+
 @router.get("/items/{item_id}", response_model=InventoryItemDetailResponse)
 def get_item(
     item_id: int,

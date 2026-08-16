@@ -4,10 +4,11 @@ import { Card, Button, ListLoadingState, StatusBadge } from '../../components/ui
 import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { EntityListCard } from '../../components/common/EntityListCard';
 import { formatDate, formatDateTime } from '../../utils/format';
-import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal, Loader, Barcode, Info } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal, Loader, Barcode, Info, X } from 'lucide-react';
 import { SerialNumberInput } from '../../components/inventory/SerialNumberInput';
 import { SerialNumberImport } from '../../components/inventory/SerialNumberImport';
 import { ChildVariantManager } from '../../components/inventory/ChildVariantManager';
+import { ChildVariantForm, ChildFormData } from '../../components/inventory/ChildVariantForm';
 import {
   useInventoryItem,
   useUpdateInventoryItem,
@@ -15,6 +16,7 @@ import {
   useRestockItem,
   useAdjustItem,
   useUpdateStockStatus,
+  useCreateChildItem,
 } from '../../hooks/useInventory';
 import { useUserNameMap } from '../../hooks/useUsers';
 
@@ -65,6 +67,27 @@ export const InventoryDetailPage: React.FC = () => {
   const [stockAction, setStockAction] = useState<'restock' | 'adjust' | null>(null);
   const [stockQty, setStockQty] = useState('');
   const [stockReason, setStockReason] = useState('');
+  const [showAddChildModal, setShowAddChildModal] = useState(false);
+  const [childError, setChildError] = useState('');
+  const [newChild, setNewChild] = useState<ChildFormData>({
+    name: '',
+    sku: '',
+    item_type: 'consumable',
+    current_quantity: 0,
+    minimum_quantity: 0,
+  });
+  const { mutate: createChild, isPending: isCreatingChild } = useCreateChildItem(itemId || 0, () => {
+    setShowAddChildModal(false);
+    setChildError('');
+    setNewChild({
+      name: '',
+      sku: '',
+      item_type: 'consumable',
+      current_quantity: 0,
+      minimum_quantity: 0,
+    });
+    refetch();
+  });
 
   const startEdit = () => {
     if (!item) return;
@@ -157,6 +180,114 @@ export const InventoryDetailPage: React.FC = () => {
     } else {
       adjustItem({ item_id: itemId, new_quantity: qty, reason: stockReason }, { onSuccess, onError });
     }
+  };
+
+  const updateNewChild = (field: keyof ChildFormData, value: any) => {
+    setNewChild((child) => ({ ...child, [field]: value }));
+  };
+
+  const handleNewChildImageSelect = (imageType: 'front' | 'back', file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const previewKey = imageType === 'front' ? 'frontPreview' : 'backPreview';
+      const fileKey = imageType === 'front' ? 'frontFile' : 'backFile';
+      setNewChild((child) => ({
+        ...child,
+        [fileKey]: file,
+        [previewKey]: e.target?.result as string,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const uploadChildPhotos = async (childId: number): Promise<boolean> => {
+    let uploadSuccess = true;
+
+    if (newChild.frontFile) {
+      try {
+        const formData = new FormData();
+        formData.append('file', newChild.frontFile);
+        formData.append('image_type', 'front');
+        await fetch(`/api/inventory/${childId}/images?image_type=front`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+          },
+          body: formData,
+        });
+      } catch {
+        uploadSuccess = false;
+      }
+    }
+
+    if (newChild.backFile) {
+      try {
+        const formData = new FormData();
+        formData.append('file', newChild.backFile);
+        formData.append('image_type', 'back');
+        await fetch(`/api/inventory/${childId}/images?image_type=back`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+          },
+          body: formData,
+        });
+      } catch {
+        uploadSuccess = false;
+      }
+    }
+
+    return uploadSuccess;
+  };
+
+  const handleAddChildSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setChildError('');
+    if (!itemId) return;
+    if (!newChild.name.trim()) {
+      setChildError('Child name is required');
+      return;
+    }
+    if (!newChild.sku.trim()) {
+      setChildError('Child SKU is required');
+      return;
+    }
+
+    const descParts = [];
+    if (newChild.primary_attribute) descParts.push(`Primary: ${newChild.primary_attribute}`);
+    if (newChild.secondary_attribute) descParts.push(`Secondary: ${newChild.secondary_attribute}`);
+    if (newChild.notes) descParts.push(`Notes: ${newChild.notes}`);
+
+    createChild(
+      {
+        name: newChild.name,
+        sku: newChild.sku,
+        barcode: newChild.barcode || undefined,
+        item_type: newChild.item_type,
+        current_quantity: newChild.current_quantity || 0,
+        minimum_quantity: newChild.minimum_quantity || 0,
+        description: descParts.length > 0 ? descParts.join(' | ') : newChild.description || undefined,
+        parent_id: itemId,
+      },
+      {
+        onSuccess: async (child) => {
+          if (newChild.frontFile || newChild.backFile) {
+            await uploadChildPhotos(child.id);
+          }
+          setShowAddChildModal(false);
+          setChildError('');
+          setNewChild({
+            name: '',
+            sku: '',
+            item_type: 'consumable',
+            current_quantity: 0,
+            minimum_quantity: 0,
+          });
+          refetch();
+        },
+        onError: (err: any) => setChildError(getApiError(err, 'Failed to create child variant')),
+      }
+    );
   };
 
   if (isLoading) return <ListLoadingState message="Loading item..." />;
@@ -299,9 +430,20 @@ export const InventoryDetailPage: React.FC = () => {
       {/* Child Variants (shown when item is a parent) */}
       {!isEditMode && item.children && item.children.length > 0 && (
         <Card padding="lg">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4">
-            Child Variants ({item.children.length})
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-neutral-900">
+              Child Variants ({item.children.length})
+            </h2>
+            {itemId && (
+              <Button
+                onClick={() => setShowAddChildModal(true)}
+                className="flex items-center gap-2 bg-primary-600 text-white hover:bg-primary-700 text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Child Variant
+              </Button>
+            )}
+          </div>
           <p className="text-sm text-neutral-600 mb-4">
             Click "Edit" to manage attributes and upload product images (front/back).
           </p>
@@ -711,6 +853,71 @@ export const InventoryDetailPage: React.FC = () => {
               </div>
             )}
           </Card>
+
+          {/* Add Child Variant Modal */}
+          {showAddChildModal && itemId && (
+            <Card padding="lg" className="border-2 border-primary-500 fixed inset-0 max-w-2xl mx-auto my-4 overflow-y-auto z-50">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-semibold text-neutral-900">Add Child Variant</h2>
+                <button
+                  onClick={() => {
+                    setShowAddChildModal(false);
+                    setChildError('');
+                  }}
+                  className="p-1 hover:bg-neutral-100 rounded-lg transition-colors"
+                  title="Close modal"
+                >
+                  <X className="w-5 h-5 text-neutral-600" />
+                </button>
+              </div>
+
+              {childError && (
+                <div className="mb-4 p-4 bg-error/10 border border-error rounded-lg text-sm text-error">
+                  {childError}
+                </div>
+              )}
+
+              <form onSubmit={handleAddChildSubmit} className="space-y-6">
+                <ChildVariantForm
+                  child={newChild}
+                  index={0}
+                  onChange={updateNewChild}
+                  onImageSelect={handleNewChildImageSelect}
+                  onRemoveImage={(type) => {
+                    const previewKey = type === 'front' ? 'frontPreview' : 'backPreview';
+                    const fileKey = type === 'front' ? 'frontFile' : 'backFile';
+                    setNewChild((c) => ({ ...c, [fileKey]: undefined, [previewKey]: undefined }));
+                  }}
+                  disabled={isCreatingChild}
+                  showPhotos={true}
+                  showRemoveButton={false}
+                  showDuplicateButton={false}
+                />
+
+                <div className="flex gap-3 justify-end pt-6 border-t border-neutral-200">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setShowAddChildModal(false);
+                      setChildError('');
+                    }}
+                    disabled={isCreatingChild}
+                    className="px-4 py-2 border border-neutral-300 rounded-lg text-neutral-700 hover:bg-neutral-50"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isCreatingChild}
+                    className="px-4 py-2 bg-primary-600 text-white hover:bg-primary-700 flex items-center gap-2"
+                  >
+                    {isCreatingChild && <Loader className="w-4 h-4 animate-spin" />}
+                    {isCreatingChild ? 'Adding...' : 'Add Child Variant'}
+                  </Button>
+                </div>
+              </form>
+            </Card>
+          )}
 
           {/* Serial Management Modal */}
           {showSerialMgmt && (

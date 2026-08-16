@@ -53,6 +53,21 @@ export const useCreateInventoryItemBatch = (onSuccess?: (item: InventoryItemResp
   });
 };
 
+export const useCreateChildItem = (parentId: number, onSuccess?: (item: InventoryItemResponse) => void) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: InventoryItemCreateRequest) => inventoryApi.createChild(parentId, data),
+    onSuccess: (item) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-item', parentId], exact: true });
+      queryClient.invalidateQueries({ queryKey: ['inventory'], exact: false });
+      toast.success('Child variant created successfully');
+      onSuccess?.(item);
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to create child variant'),
+  });
+};
+
 export const useUpdateInventoryItem = () => {
   const queryClient = useQueryClient();
 

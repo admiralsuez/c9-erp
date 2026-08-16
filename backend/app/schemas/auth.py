@@ -1,18 +1,31 @@
 from __future__ import annotations
-from typing import Optional, List
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from typing import Optional, List, Annotated
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, PlainValidator
 from datetime import datetime
+
+# Custom email validator that allows .local domains (for internal use)
+def validate_email(v: str) -> str:
+    """Validate email allowing .local domains."""
+    if not v or '@' not in v:
+        raise ValueError('Invalid email format')
+    local, domain = v.rsplit('@', 1)
+    if not local or not domain:
+        raise ValueError('Invalid email format')
+    # Allow .local domains which are reserved but commonly used internally
+    return v
+
+FlexibleEmailStr = Annotated[str, PlainValidator(validate_email)]
 
 
 # ============ AUTH ============
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: FlexibleEmailStr
     password: str
 
 
 class UserBase(BaseModel):
     full_name: str
-    email: EmailStr
+    email: FlexibleEmailStr
     department: Optional[str] = None
     location: str = "HO"
 
@@ -76,7 +89,7 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[FlexibleEmailStr] = None
     department: Optional[str] = None
     role_id: Optional[int] = None
     location: Optional[str] = None
@@ -84,7 +97,7 @@ class UserUpdate(BaseModel):
 
 # ============ PASSWORD RESET ============
 class PasswordResetRequest(BaseModel):
-    email: EmailStr
+    email: FlexibleEmailStr
 
 
 class PasswordResetConfirm(BaseModel):

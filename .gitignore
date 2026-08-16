@@ -80,8 +80,13 @@ backend/uploads/images/*
 logs/
 
 # ============================================================================
-# Documentation & Media (optional - include if needed)
+# Documentation & Media
 # ============================================================================
+# Keep docs in /docs folder - ignore root markdown files except README
+*.md
+!README.md
+!docs/
+
 # Uncomment to ignore media files in source:
 # *.pdf
 # *.png

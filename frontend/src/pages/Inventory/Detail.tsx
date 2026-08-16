@@ -306,7 +306,7 @@ export const InventoryDetailPage: React.FC = () => {
             Click "Edit" to manage attributes and upload product images (front/back).
           </p>
           <div className="space-y-2">
-            {item.children.map((child) => (
+            {item.children.map((child: any) => (
               <ChildVariantManager
                 key={child.id}
                 variant={{
@@ -315,15 +315,24 @@ export const InventoryDetailPage: React.FC = () => {
                   sku: child.sku,
                   description: child.description || '',
                   image_url: child.image_url,
-                  front_image_url: (child.description?.includes('front_image_url')) ? child.image_url : undefined,
-                  back_image_url: (child.description?.includes('back_image_url')) ? child.image_url : undefined,
+                  front_image_url: child.front_image_url,
+                  back_image_url: child.back_image_url,
                 }}
                 onUpdate={(id, data) => {
                   if (data.description) {
-                    updateItem({
-                      itemId: id,
-                      data: { description: data.description },
-                    });
+                    updateItem(
+                      {
+                        itemId: id,
+                        data: { description: data.description },
+                      },
+                      {
+                        onSuccess: () => refetch(),
+                      }
+                    );
+                  }
+                  // After image upload, refetch to get updated images
+                  if (data.front_image_url || data.back_image_url) {
+                    refetch();
                   }
                 }}
                 isUpdating={isUpdating}

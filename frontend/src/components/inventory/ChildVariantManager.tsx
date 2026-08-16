@@ -166,31 +166,33 @@ export const ChildVariantManager: React.FC<ChildVariantManagerProps> = ({
           </div>
 
           {/* Images */}
-          <div className="space-y-3">
-            <h5 className="text-xs font-semibold text-neutral-900 uppercase tracking-wide">Images</h5>
+          <div className="border border-neutral-200 rounded-lg p-3 space-y-3">
+            <h5 className="text-xs font-semibold text-neutral-900 uppercase tracking-wide">Item Photos</h5>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Front Image */}
-              <div className="p-2 border border-neutral-300 rounded-lg">
-                <p className="text-xs font-medium text-neutral-700 mb-2">Front Image</p>
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-neutral-700">Front Photo</label>
                 {variant.front_image_url ? (
                   <div className="relative group">
                     <img
                       src={variant.front_image_url}
                       alt="Front"
-                      className="w-full h-32 object-cover rounded border border-neutral-200"
+                      className="w-full h-40 object-cover rounded border border-neutral-200"
                     />
                     <button
                       type="button"
                       onClick={() => removeImage('front')}
-                      className="absolute top-1 right-1 p-1 bg-error text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remove photo"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
                 ) : (
-                  <label className="block p-4 border-2 border-dashed border-neutral-300 rounded-lg hover:border-primary-400 cursor-pointer text-center">
-                    <Camera className="w-4 h-4 mx-auto text-neutral-400 mb-1" />
-                    <span className="text-xs text-neutral-600">Click to upload</span>
+                  <label className="block p-4 border-2 border-dashed border-neutral-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 cursor-pointer text-center transition-colors">
+                    <Camera className="w-5 h-5 mx-auto text-neutral-400 mb-1" />
+                    <span className="text-xs text-neutral-600 block">Click or drag to upload</span>
+                    <span className="text-xs text-neutral-500 block mt-1">JPG, PNG (Max 10MB)</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -203,30 +205,38 @@ export const ChildVariantManager: React.FC<ChildVariantManagerProps> = ({
                     />
                   </label>
                 )}
+                {uploadingFront && (
+                  <div className="flex items-center justify-center gap-2 text-xs text-neutral-600">
+                    <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-blue-500"></div>
+                    Uploading...
+                  </div>
+                )}
               </div>
 
               {/* Back Image */}
-              <div className="p-2 border border-neutral-300 rounded-lg">
-                <p className="text-xs font-medium text-neutral-700 mb-2">Back Image</p>
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-neutral-700">Back Photo</label>
                 {variant.back_image_url ? (
                   <div className="relative group">
                     <img
                       src={variant.back_image_url}
                       alt="Back"
-                      className="w-full h-32 object-cover rounded border border-neutral-200"
+                      className="w-full h-40 object-cover rounded border border-neutral-200"
                     />
                     <button
                       type="button"
                       onClick={() => removeImage('back')}
-                      className="absolute top-1 right-1 p-1 bg-error text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remove photo"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
                 ) : (
-                  <label className="block p-4 border-2 border-dashed border-neutral-300 rounded-lg hover:border-primary-400 cursor-pointer text-center">
-                    <Camera className="w-4 h-4 mx-auto text-neutral-400 mb-1" />
-                    <span className="text-xs text-neutral-600">Click to upload</span>
+                  <label className="block p-4 border-2 border-dashed border-neutral-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 cursor-pointer text-center transition-colors">
+                    <Camera className="w-5 h-5 mx-auto text-neutral-400 mb-1" />
+                    <span className="text-xs text-neutral-600 block">Click or drag to upload</span>
+                    <span className="text-xs text-neutral-500 block mt-1">JPG, PNG (Max 10MB)</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -238,6 +248,12 @@ export const ChildVariantManager: React.FC<ChildVariantManagerProps> = ({
                       className="hidden"
                     />
                   </label>
+                )}
+                {uploadingBack && (
+                  <div className="flex items-center justify-center gap-2 text-xs text-neutral-600">
+                    <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-blue-500"></div>
+                    Uploading...
+                  </div>
                 )}
               </div>
             </div>

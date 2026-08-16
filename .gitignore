@@ -1,4 +1,6 @@
+# ============================================================================
 # Python
+# ============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,46 +21,70 @@ wheels/
 .pytest_cache/
 .coverage
 htmlcov/
+*.egg-info/
 
-# IDEs
+# ============================================================================
+# IDEs & Editors
+# ============================================================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
+Thumbs.db
 
-# Node
+# ============================================================================
+# Node.js
+# ============================================================================
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-build/
 .next/
-dist/
 
+# ============================================================================
 # Docker
+# ============================================================================
 docker-compose.override.yml
 
+# ============================================================================
 # Database
+# ============================================================================
 *.db
 *.sqlite
 *.sqlite3
 postgres_data/
 
-# OS
-.DS_Store
-Thumbs.db
+# ============================================================================
+# Project Organization - Folders to Ignore
+# ============================================================================
+# Logs (stored in backend/logs/)
+backend/logs/*
+!backend/logs/.gitkeep
 
-# Logs
+# Temporary files (stored in backend/temp/)
+backend/temp/*
+!backend/temp/.gitkeep
+
+# User uploads (stored in backend/uploads/)
+backend/uploads/documents/*
+!backend/uploads/documents/.gitkeep
+backend/uploads/images/*
+!backend/uploads/images/.gitkeep
+
+# ============================================================================
+# Application Logs
+# ============================================================================
 *.log
 logs/
-*.md
 
-
-*.pdf
-
-*.png
-*.jpg
-*.jpeg
-*.xls
+# ============================================================================
+# Documentation & Media (optional - include if needed)
+# ============================================================================
+# Uncomment to ignore media files in source:
+# *.pdf
+# *.png
+# *.jpg
+# *.jpeg
+# *.xls

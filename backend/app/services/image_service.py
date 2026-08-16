@@ -1,9 +1,10 @@
 """
-Image upload service for DigitalOcean Spaces
+Image upload service
 Handles uploading, deleting, and managing inventory item images
+Supports local disk storage or DigitalOcean Spaces (S3-compatible)
 """
 
-import boto3
+import os
 from datetime import datetime
 import mimetypes
 import io
@@ -16,25 +17,45 @@ try:
 except ImportError:
     HAS_PILLOW = False
 
+try:
+    import boto3
+    HAS_BOTO3 = True
+except ImportError:
+    HAS_BOTO3 = False
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class ImageUploadService:
-    """Service to handle image uploads to DigitalOcean Spaces"""
+    """Service to handle image uploads (local disk or S3-compatible storage)"""
     
     def __init__(self):
-        """Initialize S3 client for DigitalOcean Spaces"""
-        self.s3_client = boto3.client(
-            's3',
-            region_name=settings.DO_SPACES_REGION,
-            endpoint_url=settings.DO_SPACES_ENDPOINT,
-            aws_access_key_id=settings.DO_SPACES_KEY,
-            aws_secret_access_key=settings.DO_SPACES_SECRET
+        """Initialize upload service with local or S3 backend based on config"""
+        # Check if S3 credentials are configured
+        self.use_s3 = (
+            HAS_BOTO3 and 
+            settings.DO_SPACES_KEY and 
+            settings.DO_SPACES_SECRET
         )
-        self.bucket = settings.DO_SPACES_BUCKET
-        self.cdn_url = settings.DO_SPACES_CDN_URL or settings.DO_SPACES_ENDPOINT
+        
+        if self.use_s3:
+            logger.info("Using DigitalOcean Spaces for image storage")
+            self.s3_client = boto3.client(
+                's3',
+                region_name=settings.DO_SPACES_REGION,
+                endpoint_url=settings.DO_SPACES_ENDPOINT,
+                aws_access_key_id=settings.DO_SPACES_KEY,
+                aws_secret_access_key=settings.DO_SPACES_SECRET
+            )
+            self.bucket = settings.DO_SPACES_BUCKET
+            self.cdn_url = settings.DO_SPACES_CDN_URL or settings.DO_SPACES_ENDPOINT
+        else:
+            logger.info("Using local disk storage for images (S3 not configured)")
+            self.upload_dir = Path(os.getenv('UPLOAD_DIR', './uploads/images'))
+            self.upload_dir.mkdir(parents=True, exist_ok=True)
+            self.s3_client = None
     
     def upload_image(
         self,
@@ -44,7 +65,7 @@ class ImageUploadService:
         filename: str = None
     ) -> str:
         """
-        Upload an image to DigitalOcean Spaces
+        Upload an image to storage backend (local disk or S3)
         
         Args:
             file_content: The file bytes to upload
@@ -82,53 +103,85 @@ class ImageUploadService:
         
         # Generate unique filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        s3_filename = f"inventory/item_{item_id}/image_{image_type}_{timestamp}{ext}"
         
         try:
-            # Determine content type
-            content_type = mimetypes.guess_type(filename or f"image{ext}")[0] or "image/jpeg"
-            
-            # Upload to Spaces
-            self.s3_client.put_object(
-                Bucket=self.bucket,
-                Key=s3_filename,
-                Body=file_content,
-                ContentType=content_type,
-                ACL='public-read'
-            )
-            
-            # Generate public URL
-            if self.cdn_url and self.cdn_url != settings.DO_SPACES_ENDPOINT:
-                # Use CDN if available
-                image_url = f"{self.cdn_url.rstrip('/')}/{s3_filename}"
+            if self.use_s3:
+                return self._upload_to_s3(file_content, item_id, image_type, timestamp, ext)
             else:
-                # Use Spaces URL directly
-                image_url = f"{settings.DO_SPACES_ENDPOINT.rstrip('/')}/{self.bucket}/{s3_filename}"
-            
-            logger.info(f"Successfully uploaded image for item {item_id} ({image_type}): {image_url}")
-            return image_url
-            
+                return self._upload_to_disk(file_content, item_id, image_type, timestamp, ext)
+                
         except Exception as e:
             logger.error(f"Failed to upload image for item {item_id}: {str(e)}")
             raise Exception(f"Image upload failed: {str(e)}")
     
+    def _upload_to_s3(self, file_content: bytes, item_id: int, image_type: str, timestamp: str, ext: str) -> str:
+        """Upload image to DigitalOcean Spaces (S3-compatible)"""
+        s3_filename = f"inventory/item_{item_id}/image_{image_type}_{timestamp}{ext}"
+        content_type = mimetypes.guess_type(f"image{ext}")[0] or "image/jpeg"
+        
+        self.s3_client.put_object(
+            Bucket=self.bucket,
+            Key=s3_filename,
+            Body=file_content,
+            ContentType=content_type,
+            ACL='public-read'
+        )
+        
+        # Generate public URL
+        if self.cdn_url and self.cdn_url != settings.DO_SPACES_ENDPOINT:
+            image_url = f"{self.cdn_url.rstrip('/')}/{s3_filename}"
+        else:
+            image_url = f"{settings.DO_SPACES_ENDPOINT.rstrip('/')}/{self.bucket}/{s3_filename}"
+        
+        logger.info(f"Successfully uploaded image to S3 for item {item_id} ({image_type}): {image_url}")
+        return image_url
+    
+    def _upload_to_disk(self, file_content: bytes, item_id: int, image_type: str, timestamp: str, ext: str) -> str:
+        """Upload image to local disk storage"""
+        # Create directory structure for this item
+        item_dir = self.upload_dir / f"item_{item_id}"
+        item_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate filename
+        disk_filename = f"image_{image_type}_{timestamp}{ext}"
+        file_path = item_dir / disk_filename
+        
+        # Write file to disk
+        with open(file_path, 'wb') as f:
+            f.write(file_content)
+        
+        # Return relative URL path for API
+        relative_path = f"item_{item_id}/{disk_filename}"
+        image_url = f"/static/uploads/images/{relative_path}"
+        
+        logger.info(f"Successfully uploaded image to disk for item {item_id} ({image_type}): {image_url}")
+        return image_url
+    
     def delete_image(self, image_url: str) -> bool:
         """
-        Delete an image from DigitalOcean Spaces
+        Delete an image from storage backend
         
         Args:
-            image_url: The full URL of the image to delete
+            image_url: The full URL or path of the image to delete
             
         Returns:
             True if successful, False otherwise
         """
         try:
+            if self.use_s3:
+                return self._delete_from_s3(image_url)
+            else:
+                return self._delete_from_disk(image_url)
+                
+        except Exception as e:
+            logger.error(f"Failed to delete image {image_url}: {str(e)}")
+            return False
+    
+    def _delete_from_s3(self, image_url: str) -> bool:
+        """Delete image from DigitalOcean Spaces"""
+        try:
             # Extract key from URL
-            # URL format: https://sfo3.digitaloceanspaces.com/bucket/key
-            # or CDN format: https://cdn.example.com/bucket/key
-            
             if self.bucket in image_url:
-                # Extract everything after bucket name
                 key = image_url.split(f"/{self.bucket}/")[-1]
             else:
                 logger.warning(f"Could not extract key from URL: {image_url}")
@@ -139,11 +192,33 @@ class ImageUploadService:
                 Key=key
             )
             
-            logger.info(f"Successfully deleted image: {image_url}")
+            logger.info(f"Successfully deleted image from S3: {image_url}")
             return True
-            
         except Exception as e:
-            logger.error(f"Failed to delete image {image_url}: {str(e)}")
+            logger.error(f"Failed to delete image from S3: {str(e)}")
+            return False
+    
+    def _delete_from_disk(self, image_url: str) -> bool:
+        """Delete image from local disk"""
+        try:
+            # Extract filename from URL path
+            # URL format: /static/uploads/images/item_ID/image_type_timestamp.ext
+            if '/item_' in image_url:
+                relative_path = image_url.split('/static/uploads/images/')[-1]
+                file_path = self.upload_dir / relative_path
+                
+                if file_path.exists():
+                    file_path.unlink()
+                    logger.info(f"Successfully deleted image from disk: {image_url}")
+                    return True
+                else:
+                    logger.warning(f"File not found: {file_path}")
+                    return False
+            else:
+                logger.warning(f"Could not extract path from URL: {image_url}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to delete image from disk: {str(e)}")
             return False
     
     def compress_image(self, file_content: bytes, quality: int = 85, max_width: int = 1920) -> bytes:

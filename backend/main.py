@@ -89,9 +89,30 @@ async def lifespan(app: FastAPI):
     try:
         from alembic.config import Config
         from alembic import command
+        import subprocess
+        
         alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("Alembic migrations up to date")
+        
+        # Run migrations with a timeout to prevent indefinite blocking
+        try:
+            # Use subprocess with timeout to prevent hanging
+            result = subprocess.run(
+                ["alembic", "upgrade", "head"],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                capture_output=True,
+                timeout=30,
+                text=True
+            )
+            if result.returncode == 0:
+                logger.info("Alembic migrations up to date")
+            else:
+                logger.warning(f"Alembic migration returned code {result.returncode}: {result.stderr}")
+        except subprocess.TimeoutExpired:
+            logger.warning("Alembic migration timed out (30s) - skipping for now. Check database manually.")
+        except FileNotFoundError:
+            # Fallback to direct call if alembic CLI not available
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Alembic migrations up to date")
     except Exception as e:
         logger.warning(f"Alembic migration failed (ignored for dev): {e}")
 

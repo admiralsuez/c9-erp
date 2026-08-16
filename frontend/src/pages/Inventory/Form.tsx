@@ -15,6 +15,13 @@ interface InventoryFormProps {
   itemId?: number;
 }
 
+interface ChildWithFiles extends InventoryItemChildRequest {
+  frontFile?: File;
+  backFile?: File;
+  frontPreview?: string;
+  backPreview?: string;
+}
+
 const DEFAULT_CATEGORIES = ['Furniture', 'Supplies', 'Lighting', 'Electronics', 'Tools'];
 const itemTypes = [
   { value: 'consumable', label: 'Consumable (Single-use)' },
@@ -32,7 +39,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
   const [selectedParentId, setSelectedParentId] = useState<number | ''>('');
   const [parentItems, setParentItems] = useState<Array<{ id: number; name: string; sku: string }>>([]);
   const [isParent, setIsParent] = useState(false);
-  const [children, setChildren] = useState<InventoryItemChildRequest[]>([]);
+  const [children, setChildren] = useState<ChildWithFiles[]>([]);
   const childrenEndRef = useRef<HTMLDivElement>(null);
   const { data: itemsData } = useInventory(1, 100);
   const { mutate: createItem, isPending } = useCreateInventoryItem((item) => {
@@ -84,6 +91,10 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
       primary_attribute: '',
       secondary_attribute: '',
       notes: '',
+      frontFile: undefined,
+      backFile: undefined,
+      frontPreview: undefined,
+      backPreview: undefined,
     }]);
   };
 
@@ -97,9 +108,65 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
     setTimeout(() => childrenEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 0);
   };
 
-  const updateChild = (index: number, field: keyof InventoryItemChildRequest, value: any) => {
+  const updateChild = (index: number, field: keyof ChildWithFiles, value: any) => {
     const updated = children.map((c, i) => i === index ? { ...c, [field]: value } : c);
     setChildren(updated);
+  };
+
+  const handleChildImageSelect = (index: number, imageType: 'front' | 'back', file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const previewKey = imageType === 'front' ? 'frontPreview' : 'backPreview';
+      const fileKey = imageType === 'front' ? 'frontFile' : 'backFile';
+      const updated = children.map((c, i) => 
+        i === index 
+          ? { ...c, [fileKey]: file, [previewKey]: e.target?.result as string } 
+          : c
+      );
+      setChildren(updated);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const uploadChildPhotos = async (childId: number, index: number): Promise<boolean> => {
+    const child = children[index];
+    let uploadSuccess = true;
+
+    if (child.frontFile) {
+      try {
+        const formData = new FormData();
+        formData.append('file', child.frontFile);
+        formData.append('image_type', 'front');
+        await fetch(`/api/inventory/${childId}/images?image_type=front`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          },
+          body: formData,
+        });
+      } catch (error) {
+        uploadSuccess = false;
+      }
+    }
+
+    if (child.backFile) {
+      try {
+        const formData = new FormData();
+        formData.append('file', child.backFile);
+        formData.append('image_type', 'back');
+        await fetch(`/api/inventory/${childId}/images?image_type=back`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          },
+          body: formData,
+        });
+      } catch (error) {
+        uploadSuccess = false;
+      }
+    }
+
+    return uploadSuccess;
   };
 
   const onSubmit = async (data: any) => {
@@ -115,23 +182,55 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
         setSubmitError('Each child needs a name and SKU');
         return;
       }
-      createBatch({
-        parent: {
-          name: data.name,
-          sku: data.sku,
-          barcode: data.barcode || undefined,
-          category_id: data.category_id || undefined,
-          item_type: data.item_type,
-          current_quantity: 0,
-          minimum_quantity: 0,
-          description: data.description || undefined,
+      
+      // Extract child data without file/preview fields for API
+      const childrenForApi = children.map(c => ({
+        name: c.name,
+        sku: c.sku,
+        barcode: c.barcode,
+        item_type: c.item_type,
+        current_quantity: c.current_quantity || 0,
+        minimum_quantity: c.minimum_quantity || 0,
+        description: c.description,
+        primary_attribute: c.primary_attribute,
+        secondary_attribute: c.secondary_attribute,
+        notes: c.notes,
+      }));
+      
+      createBatch(
+        {
+          parent: {
+            name: data.name,
+            sku: data.sku,
+            barcode: data.barcode || undefined,
+            category_id: data.category_id || undefined,
+            item_type: data.item_type,
+            current_quantity: 0,
+            minimum_quantity: 0,
+            description: data.description || undefined,
+          },
+          children: childrenForApi,
         },
-        children: children.map(c => ({
-          ...c,
-          current_quantity: c.current_quantity || 0,
-          minimum_quantity: c.minimum_quantity || 0,
-        })),
-      });
+        {
+          onSuccess: async (parentItem) => {
+            // Upload photos for each child that has them
+            if (parentItem.children && parentItem.children.length > 0) {
+              for (let i = 0; i < children.length; i++) {
+                const childItem = parentItem.children[i];
+                if (childItem && (children[i].frontFile || children[i].backFile)) {
+                  await uploadChildPhotos(childItem.id, i);
+                }
+              }
+            }
+            navigate(`/inventory/${parentItem.id}`);
+          },
+          onError: (err: any) => {
+            const detail = err?.response?.data?.detail;
+            const message = typeof detail === 'string' ? detail : detail?.message || 'Failed to create batch';
+            setSubmitError(message);
+          },
+        }
+      );
     } else {
       const itemData: InventoryItemCreateRequest = {
         name: data.name,
@@ -468,6 +567,94 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
                         className="form-input text-sm resize-none"
                         disabled={isBatchPending}
                       />
+                    </div>
+                    {/* Item Photos */}
+                    <div className="border border-neutral-200 rounded-lg p-3 space-y-3">
+                      <h5 className="text-xs font-semibold text-neutral-900 uppercase tracking-wide">Item Photos</h5>
+                      <p className="text-xs text-neutral-500">
+                        Upload front and back photos. They will be added when you save the item.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Front Photo */}
+                        <div className="space-y-2">
+                          <label className="block text-xs font-medium text-neutral-700">Front Photo</label>
+                          {child.frontPreview ? (
+                            <div className="relative group">
+                              <img
+                                src={child.frontPreview}
+                                alt="Front preview"
+                                className="w-full h-32 object-cover rounded border border-neutral-200"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateChild(idx, 'frontFile', undefined);
+                                  updateChild(idx, 'frontPreview', undefined);
+                                }}
+                                className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                                title="Remove photo"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="block p-3 border-2 border-dashed border-neutral-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 cursor-pointer text-center transition-colors">
+                              <span className="text-xs text-neutral-600 block">Click to upload</span>
+                              <span className="text-xs text-neutral-500 block mt-1">JPG, PNG (Max 10MB)</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleChildImageSelect(idx, 'front', file);
+                                }}
+                                className="hidden"
+                                disabled={isBatchPending}
+                              />
+                            </label>
+                          )}
+                        </div>
+
+                        {/* Back Photo */}
+                        <div className="space-y-2">
+                          <label className="block text-xs font-medium text-neutral-700">Back Photo</label>
+                          {child.backPreview ? (
+                            <div className="relative group">
+                              <img
+                                src={child.backPreview}
+                                alt="Back preview"
+                                className="w-full h-32 object-cover rounded border border-neutral-200"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateChild(idx, 'backFile', undefined);
+                                  updateChild(idx, 'backPreview', undefined);
+                                }}
+                                className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                                title="Remove photo"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="block p-3 border-2 border-dashed border-neutral-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 cursor-pointer text-center transition-colors">
+                              <span className="text-xs text-neutral-600 block">Click to upload</span>
+                              <span className="text-xs text-neutral-500 block mt-1">JPG, PNG (Max 10MB)</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleChildImageSelect(idx, 'back', file);
+                                }}
+                                className="hidden"
+                                disabled={isBatchPending}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}

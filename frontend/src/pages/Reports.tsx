@@ -159,80 +159,76 @@ export const ReportsPage: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card padding="lg" className="hover:shadow-md transition-shadow">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-lg bg-primary-50 flex items-center justify-center flex-shrink-0">
-              <Calendar className="w-6 h-6 text-primary-600" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-lg font-semibold text-neutral-900">Weekly Report</h2>
-              <p className="text-sm text-neutral-600 mt-1">
-                Orders placed, inventory changes, vendor performance, and user activity over the last 7 days.
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Button
-                  onClick={() => generateReport('weekly', 'view')}
-                  disabled={isGen('weekly-view')}
-                  className="px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 text-sm disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isGen('weekly-view') ? (
-                    <><Loader className="w-4 h-4 animate-spin" /> Loading...</>
-                  ) : (
-                    <><Eye className="w-4 h-4" /> View</>
-                  )}
-                </Button>
-                <Button
-                  onClick={() => generateReport('weekly', 'download')}
-                  disabled={isGen('weekly-download')}
-                  variant="secondary"
-                  className="px-3 py-2 text-sm flex items-center gap-2"
-                >
-                  {isGen('weekly-download') ? (
-                    <><Loader className="w-4 h-4 animate-spin" /> Loading...</>
-                  ) : (
-                    <><Download className="w-4 h-4" /> Download</>
-                  )}
-                </Button>
-              </div>
+        <Card padding="lg" className="hover:shadow-md transition-shadow flex items-start gap-4">
+          <div className="w-12 h-12 rounded-lg bg-primary-50 flex items-center justify-center flex-shrink-0">
+            <Calendar className="w-6 h-6 text-primary-600" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold text-neutral-900">Weekly Report</h2>
+            <p className="text-sm text-neutral-600 mt-1">
+              Orders placed, inventory changes, vendor performance, and user activity over the last 7 days.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <Button
+                onClick={() => generateReport('weekly', 'view')}
+                disabled={isGen('weekly-view')}
+                className="px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 text-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {isGen('weekly-view') ? (
+                  <><Loader className="w-4 h-4 animate-spin" /> Loading...</>
+                ) : (
+                  <><Eye className="w-4 h-4" /> View</>
+                )}
+              </Button>
+              <Button
+                onClick={() => generateReport('weekly', 'download')}
+                disabled={isGen('weekly-download')}
+                variant="secondary"
+                className="px-3 py-2 text-sm flex items-center gap-2"
+              >
+                {isGen('weekly-download') ? (
+                  <><Loader className="w-4 h-4 animate-spin" /> Loading...</>
+                ) : (
+                  <><Download className="w-4 h-4" /> Download</>
+                )}
+              </Button>
             </div>
           </div>
         </Card>
 
-        <Card padding="lg" className="hover:shadow-md transition-shadow">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-lg bg-info/10 flex items-center justify-center flex-shrink-0">
-              <FileText className="w-6 h-6 text-info" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-lg font-semibold text-neutral-900">Monthly Report</h2>
-              <p className="text-sm text-neutral-600 mt-1">
-                Comprehensive overview of all orders, inventory health, vendor delivery performance, and user activity over the last 30 days.
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Button
-                  onClick={() => generateReport('monthly', 'view')}
-                  disabled={isGen('monthly-view')}
-                  className="px-3 py-2 bg-info text-white hover:bg-info/90 text-sm disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isGen('monthly-view') ? (
-                    <><Loader className="w-4 h-4 animate-spin" /> Loading...</>
-                  ) : (
-                    <><Eye className="w-4 h-4" /> View</>
-                  )}
-                </Button>
-                <Button
-                  onClick={() => generateReport('monthly', 'download')}
-                  disabled={isGen('monthly-download')}
-                  variant="secondary"
-                  className="px-3 py-2 text-sm flex items-center gap-2"
-                >
-                  {isGen('monthly-download') ? (
-                    <><Loader className="w-4 h-4 animate-spin" /> Loading...</>
-                  ) : (
-                    <><Download className="w-4 h-4" /> Download</>
-                  )}
-                </Button>
-              </div>
+        <Card padding="lg" className="hover:shadow-md transition-shadow flex items-start gap-4">
+          <div className="w-12 h-12 rounded-lg bg-info/10 flex items-center justify-center flex-shrink-0">
+            <FileText className="w-6 h-6 text-info" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold text-neutral-900">Monthly Report</h2>
+            <p className="text-sm text-neutral-600 mt-1">
+              Comprehensive overview of all orders, inventory health, vendor delivery performance, and user activity over the last 30 days.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <Button
+                onClick={() => generateReport('monthly', 'view')}
+                disabled={isGen('monthly-view')}
+                className="px-3 py-2 bg-info text-white hover:bg-info/90 text-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {isGen('monthly-view') ? (
+                  <><Loader className="w-4 h-4 animate-spin" /> Loading...</>
+                ) : (
+                  <><Eye className="w-4 h-4" /> View</>
+                )}
+              </Button>
+              <Button
+                onClick={() => generateReport('monthly', 'download')}
+                disabled={isGen('monthly-download')}
+                variant="secondary"
+                className="px-3 py-2 text-sm flex items-center gap-2"
+              >
+                {isGen('monthly-download') ? (
+                  <><Loader className="w-4 h-4 animate-spin" /> Loading...</>
+                ) : (
+                  <><Download className="w-4 h-4" /> Download</>
+                )}
+              </Button>
             </div>
           </div>
         </Card>

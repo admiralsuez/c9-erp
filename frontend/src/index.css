@@ -86,3 +86,53 @@
 .tap-highlight-none {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Compact Mode - Reduces padding and gaps for tablet-like feel */
+html.compact-mode {
+  --padding-xs: 0.375rem; /* 6px */
+  --padding-sm: 0.5rem; /* 8px */
+  --padding-md: 0.75rem; /* 12px */
+  --padding-lg: 1rem; /* 16px */
+  --gap-xs: 0.375rem;
+  --gap-sm: 0.5rem;
+  --gap-md: 0.75rem;
+  --gap-lg: 1rem;
+}
+
+html.compact-mode main {
+  @apply !p-2 md:!p-3;
+}
+
+html.compact-mode .card {
+  @apply !p-2;
+}
+
+html.compact-mode .space-y-6 > * + * {
+  @apply !mt-3;
+}
+
+html.compact-mode .space-y-4 > * + * {
+  @apply !mt-2;
+}
+
+html.compact-mode .grid {
+  @apply !gap-2 md:!gap-3;
+}
+
+html.compact-mode h1 {
+  @apply !text-2xl;
+}
+
+html.compact-mode h2 {
+  @apply !text-lg;
+}
+
+html.compact-mode button {
+  @apply !py-1.5;
+}
+
+html.compact-mode input,
+html.compact-mode select,
+html.compact-mode textarea {
+  @apply !py-1 !px-2;
+}

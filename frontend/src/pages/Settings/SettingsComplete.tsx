@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Card, ListLoadingState } from '../../components/ui';
+import { useCompactMode } from '../../contexts/CompactModeContext';
 import {
   Building2,
   Users,
@@ -12,6 +13,7 @@ import {
   ArrowLeft,
   HardDrive,
   History,
+  Smartphone,
 } from 'lucide-react';
 import {
   CompanyProfileSection,
@@ -148,14 +150,28 @@ export const SettingsPageComplete: React.FC = () => {
     );
   }
 
+  const { isCompact, setIsCompact } = useCompactMode();
+
   return (
     <div className="space-y-6 pb-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-neutral-900">Settings</h1>
-        <p className="text-neutral-600 mt-1">
-          Manage your system configuration, users, and preferences
-        </p>
+      {/* Header with Compact Mode Toggle */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-neutral-900">Settings</h1>
+          <p className="text-neutral-600 mt-1">
+            Manage your system configuration, users, and preferences
+          </p>
+        </div>
+        <label className="flex items-center gap-2 px-3 py-2 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 cursor-pointer transition-colors">
+          <Smartphone className="w-4 h-4 text-neutral-600" />
+          <input
+            type="checkbox"
+            checked={isCompact}
+            onChange={(e) => setIsCompact(e.target.checked)}
+            className="w-4 h-4"
+          />
+          <span className="text-sm text-neutral-700 font-medium">Compact Layout</span>
+        </label>
       </div>
 
       {/* Settings Overview Grid */}

@@ -8,7 +8,8 @@ import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal, Loader,
 import { SerialNumberInput } from '../../components/inventory/SerialNumberInput';
 import { SerialNumberImport } from '../../components/inventory/SerialNumberImport';
 import { ChildVariantManager } from '../../components/inventory/ChildVariantManager';
-import { ChildVariantForm, ChildFormData } from '../../components/inventory/ChildVariantForm';
+import { ChildVariantForm } from '../../components/inventory/ChildVariantForm';
+import type { ChildFormData } from '../../components/inventory/ChildVariantForm';
 import {
   useInventoryItem,
   useUpdateInventoryItem,

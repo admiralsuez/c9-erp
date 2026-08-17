@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Card, Button, FilterPill, SearchInput, CheckboxInput, FormGroup, StatusBadge } from '../components/ui';
 import { FileText, Loader, Download, Calendar, Filter, FileSpreadsheet, X, Eye } from 'lucide-react';
+import { ReportModal } from '../components/ReportModal';
 import { apiClient } from '../api/client';
 import { useInventory } from '../hooks/useInventory';
 import { useVendors } from '../hooks/useVendors';
@@ -397,9 +398,9 @@ export const ReportsPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Report Results */}
+      {/* Report Results Modal */}
       {reportData && (
-        <ReportResults data={reportData} onClose={() => setReportData(null)} />
+        <ReportModal data={reportData} onClose={() => setReportData(null)} />
       )}
 
       <Card padding="lg" className="bg-neutral-50 border-neutral-200">

@@ -1578,7 +1578,10 @@ export const OrderDetailPage: React.FC = () => {
           <p className="text-sm text-neutral-600 mb-4">
             Print this challan for dispatch. It includes all order details and can be signed by the recipient.
           </p>
-          <Challan order={order} />
+          <Challan 
+            order={order} 
+            approverName={order.approver_id ? userNames[order.approver_id] : undefined}
+          />
         </Card>
       )}
 

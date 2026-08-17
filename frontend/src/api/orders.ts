@@ -78,6 +78,7 @@ export interface OrderCreateRequest {
   remarks?: string;
   delivery_address?: string;
   challan_book_number?: string;
+  order_date?: string;
 }
 
 export interface OrderUpdateRequest {
@@ -86,6 +87,7 @@ export interface OrderUpdateRequest {
   remarks?: string;
   delivery_address?: string;
   challan_book_number?: string;
+  order_date?: string;
 }
 
 export const ordersApi = {

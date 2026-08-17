@@ -6,12 +6,14 @@ interface ChallanProps {
   order: any; // Accept any order-like object (Order or OrderResponse)
   companyName?: string;
   companyAddress?: string;
+  approverName?: string; // Name of the approver
 }
 
 export const Challan: React.FC<ChallanProps> = ({
   order,
   companyName = 'CLOUD9 BEVERAGES',
   companyAddress = 'Address: La Lavado Fabrica, Plot No. K/29, Ambernath, MIDC, Anand Nagar, Ambernath (E) - 421501.',
+  approverName,
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -227,6 +229,11 @@ export const Challan: React.FC<ChallanProps> = ({
             <tr style={{ height: '60px' }}>
               <td style={{ width: '33%', textAlign: 'center', verticalAlign: 'bottom' }}>
                 <div style={{ borderTop: '1px solid #000', paddingTop: '4px' }}>
+                  {approverName && (
+                    <div style={{ fontSize: '10px', marginBottom: '4px', fontStyle: 'italic' }}>
+                      {approverName} on {formatDate(order.updated_at || order.created_at)}
+                    </div>
+                  )}
                   <div style={{ fontSize: '11px', fontWeight: 'bold' }}>Approved By</div>
                 </div>
               </td>

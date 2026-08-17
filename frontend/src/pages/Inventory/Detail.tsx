@@ -297,7 +297,7 @@ export const InventoryDetailPage: React.FC = () => {
     return (
       <div className="space-y-6 pb-6">
         <button
-          onClick={() => navigate('/inventory')}
+          onClick={() => navigate(-1)}
           className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-neutral-600" />
@@ -332,7 +332,7 @@ export const InventoryDetailPage: React.FC = () => {
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-4">
           <button
-            onClick={() => navigate('/inventory')}
+            onClick={() => navigate(-1)}
             className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-neutral-700" />

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
@@ -41,9 +41,11 @@ class VendorUpdate(BaseModel):
 
 class VendorResponse(VendorBase):
     id: int
+    parent_id: Optional[int] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    children: List[VendorResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 

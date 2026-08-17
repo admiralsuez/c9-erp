@@ -1,11 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Card, Button, FilterPill, SearchInput, CheckboxInput, FormGroup, StatusBadge } from '../components/ui';
+import { Card, Button, FilterPill, SearchInput, CheckboxInput, FormGroup } from '../components/ui';
 import { FileText, Loader, Download, Calendar, Filter, FileSpreadsheet, X, Eye } from 'lucide-react';
 import { ReportModal } from '../components/ReportModal';
 import { apiClient } from '../api/client';
 import { useInventory } from '../hooks/useInventory';
 import { useVendors } from '../hooks/useVendors';
-import { formatDate } from '../utils/format';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -419,118 +418,6 @@ export const ReportsPage: React.FC = () => {
         </div>
       </Card>
     </div>
-  );
-};
-
-/* ============ In-App Report View ============ */
-
-const ReportResults = ({ data, onClose }: { data: ReportData; onClose: () => void }) => {
-  const { orders = [], inventory = [], total_orders = 0, total_items = 0, period, calculated_at } = data;
-  const overview = data.overview || (data.total_orders !== undefined ? null : null);
-
-  return (
-    <Card padding="lg" className="border-primary-300">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-lg font-semibold text-neutral-900">
-            {period?.label || 'Custom'} Report
-          </h2>
-          {period && (
-            <p className="text-xs text-neutral-500">
-              {period.start} → {period.end}
-              {calculated_at && ` · Generated ${formatDate(calculated_at)}`}
-            </p>
-          )}
-        </div>
-        <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600 text-xl leading-none">&times;</button>
-      </div>
-
-      {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <div className="p-3 bg-primary-50 rounded-lg border border-primary-100">
-          <p className="text-xs text-primary-700 font-medium">Total Orders</p>
-          <p className="text-2xl font-bold text-primary-900">{total_orders}</p>
-        </div>
-        {overview && (
-          <div className="p-3 bg-warning/10 rounded-lg border border-warning/20">
-            <p className="text-xs text-warning-700 font-medium">Pending Approvals</p>
-            <p className="text-2xl font-bold text-warning-800">{overview.pending_approvals}</p>
-          </div>
-        )}
-        <div className="p-3 bg-info/10 rounded-lg border border-info/20">
-          <p className="text-xs text-info-700 font-medium">Total Items</p>
-          <p className="text-2xl font-bold text-info-800">{total_items}</p>
-        </div>
-      </div>
-
-      {/* Orders table */}
-      {orders.length > 0 && (
-        <div className="mb-4">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-2">Orders ({orders.length})</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200">
-                  <th className="text-left py-2 px-2 font-semibold text-neutral-700">Order #</th>
-                  <th className="text-left py-2 px-2 font-semibold text-neutral-700">Vendor</th>
-                  <th className="text-left py-2 px-2 font-semibold text-neutral-700">Status</th>
-                  <th className="text-right py-2 px-2 font-semibold text-neutral-700">Items</th>
-                  <th className="text-left py-2 px-2 font-semibold text-neutral-700">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((o: any) => (
-                  <tr key={o.id} className="border-b border-neutral-100">
-                    <td className="py-1.5 px-2 font-mono text-primary-600">{o.order_number}</td>
-                    <td className="py-1.5 px-2">{o.vendor_name}</td>
-                    <td className="py-1.5 px-2"><StatusBadge status={o.status}>{o.status.replace(/_/g, ' ')}</StatusBadge></td>
-                    <td className="py-1.5 px-2 text-right">{o.item_count}</td>
-                    <td className="py-1.5 px-2 text-neutral-500 text-xs">{formatDate(o.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Inventory table */}
-      {inventory.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-neutral-900 mb-2">Inventory ({inventory.length})</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200">
-                  <th className="text-left py-2 px-2 font-semibold text-neutral-700">SKU</th>
-                  <th className="text-left py-2 px-2 font-semibold text-neutral-700">Name</th>
-                  <th className="text-right py-2 px-2 font-semibold text-neutral-700">On Hand</th>
-                  <th className="text-right py-2 px-2 font-semibold text-neutral-700">Reserved</th>
-                  <th className="text-right py-2 px-2 font-semibold text-neutral-700">Min Stock</th>
-                  <th className="text-left py-2 px-2 font-semibold text-neutral-700">Category</th>
-                </tr>
-              </thead>
-              <tbody>
-                {inventory.map((i: any) => (
-                  <tr key={i.id} className="border-b border-neutral-100">
-                    <td className="py-1.5 px-2 font-mono text-xs text-neutral-600">{i.sku}</td>
-                    <td className="py-1.5 px-2">{i.name}</td>
-                    <td className="py-1.5 px-2 text-right">{i.current_quantity}</td>
-                    <td className="py-1.5 px-2 text-right">{i.reserved_quantity}</td>
-                    <td className="py-1.5 px-2 text-right">{i.minimum_quantity}</td>
-                    <td className="py-1.5 px-2 text-neutral-500 text-xs">{i.category || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {orders.length === 0 && inventory.length === 0 && (
-        <p className="text-sm text-neutral-500 text-center py-6">No data found for the selected period.</p>
-      )}
-    </Card>
   );
 };
 

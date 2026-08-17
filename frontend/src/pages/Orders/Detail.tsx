@@ -137,8 +137,8 @@ export const OrderDetailPage: React.FC = () => {
     if (!order) return;
     const items = order.items
       .filter((oi: any) => {
-        const info = itemMap[oi.item_id];
-        return info?.item_type === 'returnable' && Number(oi.quantity_dispatched) > 0;
+        // Allow both returnable and consumable items to be returned
+        return Number(oi.quantity_dispatched) > 0;
       })
       .map((oi: any) => ({
         order_item_id: oi.id,
@@ -1022,6 +1022,7 @@ export const OrderDetailPage: React.FC = () => {
 
           <div className="space-y-4 max-h-96 overflow-y-auto">
             {returnItems.map((ri, idx) => {
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
               const info = itemMap[ri.item_id];
               const oi = order?.items.find((o: any) => o.id === ri.order_item_id);
               const remaining = Math.max(0, Number(oi?.quantity_dispatched || 0) - Number(oi?.quantity_returned || 0) - Number(oi?.quantity_damaged || 0));
@@ -1079,8 +1080,7 @@ export const OrderDetailPage: React.FC = () => {
                   </div>
                   <div className="mb-3">
                     <label className="text-xs text-neutral-600 font-medium mb-1 block">Reason (optional)</label>
-                    <input
-                      type="text"
+                    <select
                       value={ri.reason}
                       onChange={(e) => {
                         setReturnItems(prev => {
@@ -1089,9 +1089,14 @@ export const OrderDetailPage: React.FC = () => {
                           return next;
                         });
                       }}
-                      placeholder="e.g. damaged packaging, wrong size..."
                       className="w-full px-3 py-1.5 border border-neutral-300 rounded-lg text-sm"
-                    />
+                    >
+                      <option value="">Select a reason...</option>
+                      <option value="damaged">Damaged</option>
+                      <option value="not_needed">Not Needed</option>
+                      <option value="defective">Defective</option>
+                      <option value="other">Other</option>
+                    </select>
                   </div>
                   <div>
                     <label className="text-xs text-neutral-600 font-medium mb-1 block">Damage Photos (optional)</label>

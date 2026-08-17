@@ -475,8 +475,8 @@ def return_order(
         oi = oi_map.get(ret.order_item_id)
         if not oi:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Order item #{ret.order_item_id} not found")
-        if not oi.item or oi.item.item_type != "returnable":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Item #{oi.item_id} is not returnable")
+        if not oi.item or oi.item.item_type not in ["returnable", "consumable"]:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Item #{oi.item_id} cannot be returned (only returnable and consumable items are eligible)")
         if ret.quantity_returned <= 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Return quantity must be positive")
         if ret.quantity_damaged < 0:

@@ -75,6 +75,8 @@ export interface InventoryItemUpdateRequest {
   parent_id?: number;
   current_quantity?: number;
   barcode?: string;
+  expiry_date?: string;
+  allow_no_expiry?: boolean;
 }
 
 export interface InventoryTransactionResponse {
@@ -94,6 +96,8 @@ export interface InventoryItemDetailResponse extends InventoryItemResponse {
   transactions: InventoryTransactionResponse[];
   serial_numbers?: SerialNumberResponse[];
   parent?: InventoryItemResponse;
+  expiry_date?: string;
+  allow_no_expiry?: boolean;
 }
 
 export interface SerialNumberResponse {

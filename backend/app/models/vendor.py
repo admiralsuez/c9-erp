@@ -36,12 +36,14 @@ class Vendor(Base):
     vendor_token_hash = Column(String(64), unique=True)  # Phase 8: SHA-256 hash of vendor token
     vendor_token_expires_at = Column(DateTime(timezone=True))  # Phase 4: token expiry
     allow_portal = Column(Boolean, default=True, nullable=False)  # Phase 4: portal access flag
+    parent_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)  # For vendor address hierarchy
     is_active = Column(Boolean, default=True, nullable=False)
     deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
     
     vendor_type_rel = relationship("VendorType", back_populates="vendors")
+    parent = relationship("Vendor", remote_side=[id], backref="children")
     
     __table_args__ = (
         Index("idx_vendor_name_normalized", "name_normalized"),

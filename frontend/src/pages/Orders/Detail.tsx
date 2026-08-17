@@ -208,6 +208,7 @@ export const OrderDetailPage: React.FC = () => {
   const [editItems, setEditItems] = useState<Array<{ item_id: number; quantity_ordered: number }>>([]);
   const [editDeliveryAddress, setEditDeliveryAddress] = useState('');
   const [editRemarks, setEditRemarks] = useState('');
+  const [editChallanBookNumber, setEditChallanBookNumber] = useState('');
   const [editVendorId, setEditVendorId] = useState<number | ''>('');
   const [showItemSelector, setShowItemSelector] = useState(false);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
@@ -219,6 +220,7 @@ export const OrderDetailPage: React.FC = () => {
     setEditItems(order.items.map((it: any) => ({ item_id: it.item_id, quantity_ordered: Number(it.quantity_ordered) })));
     setEditDeliveryAddress(order.delivery_address || '');
     setEditRemarks(order.remarks || '');
+    setEditChallanBookNumber(order.challan_book_number || '');
     setEditVendorId(order.vendor_id);
     setIsEditing(true);
   };
@@ -240,6 +242,7 @@ export const OrderDetailPage: React.FC = () => {
           items: editItems.map(i => ({ item_id: i.item_id, quantity_ordered: i.quantity_ordered })),
           delivery_address: editDeliveryAddress || undefined,
           remarks: editRemarks || undefined,
+          challan_book_number: editChallanBookNumber || undefined,
         },
       },
       {
@@ -1201,6 +1204,20 @@ export const OrderDetailPage: React.FC = () => {
               />
             ) : (
               <p className="text-neutral-900">{order.remarks || '—'}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-sm text-neutral-600 font-medium mb-1">Challan Book Number</p>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editChallanBookNumber}
+                onChange={(e) => setEditChallanBookNumber(e.target.value)}
+                placeholder="e.g., CB-2024-001"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+              />
+            ) : (
+              <p className="text-neutral-900">{order.challan_book_number || '—'}</p>
             )}
           </div>
         </div>

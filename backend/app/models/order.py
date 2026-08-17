@@ -31,6 +31,7 @@ class Order(Base):
     status = Column(String(30), nullable=False, default="draft")  # draft | pending_requisition | signed_requisition_uploaded | approved | dispatched | delivered | closed | cancelled
     remarks = Column(Text)
     delivery_address = Column(Text)
+    challan_book_number = Column(String(100), nullable=True)  # Challan book number when dispatching
     created_by = Column(Integer, ForeignKey("users.id"))
     approver_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     deleted_at = Column(DateTime(timezone=True))

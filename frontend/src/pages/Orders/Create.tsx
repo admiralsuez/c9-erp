@@ -22,6 +22,7 @@ export const OrderCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const [vendorId, setVendorId] = useState<number | ''>('');
   const [remarks, setRemarks] = useState('');
+  const [challanBookNumber, setChallanBookNumber] = useState('');
   const [sameAsVendorAddress, setSameAsVendorAddress] = useState(false);
   const [deliveryName, setDeliveryName] = useState('');
   const [deliveryPhone, setDeliveryPhone] = useState('');
@@ -234,6 +235,7 @@ export const OrderCreatePage: React.FC = () => {
       })),
       remarks: remarks || undefined,
       delivery_address: buildDeliveryAddress(),
+      challan_book_number: challanBookNumber || undefined,
     };
 
     createOrder(orderData);
@@ -623,6 +625,11 @@ export const OrderCreatePage: React.FC = () => {
             <div>
               <label className={formLabel}>Remarks</label>
               <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Add any special remarks or notes..." rows={3} className="w-full border border-neutral-300 rounded-lg px-3 py-2" />
+            </div>
+
+            <div>
+              <label className={formLabel}>Challan Book Number (Optional)</label>
+              <input type="text" value={challanBookNumber} onChange={(e) => setChallanBookNumber(e.target.value)} placeholder="e.g., CB-2024-001" className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
             </div>
           </div>
         </Card>

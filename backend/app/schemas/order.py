@@ -48,6 +48,7 @@ class OrderCreateRequest(BaseModel):
     items: List[OrderItemCreateRequest]
     remarks: Optional[str] = None
     delivery_address: Optional[str] = None
+    challan_book_number: Optional[str] = None  # Challan book number when creating order
     order_date: Optional[datetime] = None  # Optional backdate for order
 
 
@@ -56,6 +57,7 @@ class OrderUpdateRequest(BaseModel):
     items: Optional[List[OrderItemCreateRequest]] = None
     remarks: Optional[str] = None
     delivery_address: Optional[str] = None
+    challan_book_number: Optional[str] = None
 
 
 class OrderTimelineEntryResponse(BaseModel):
@@ -75,6 +77,7 @@ class OrderResponse(BaseModel):
     status: str
     remarks: Optional[str] = None
     delivery_address: Optional[str] = None
+    challan_book_number: Optional[str] = None
     created_by: Optional[int] = None
     approver_id: Optional[int] = None
     created_at: datetime

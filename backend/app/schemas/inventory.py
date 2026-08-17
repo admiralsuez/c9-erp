@@ -73,6 +73,7 @@ class InventoryItemUpdate(BaseModel):
     expiry_date: Optional[datetime] = None
     allow_no_expiry: Optional[bool] = None
     stock_status: Optional[str] = None  # active | expired | damaged
+    current_quantity: Optional[float] = None  # Allow direct quantity edits
 
 
 class InventoryTransactionResponse(BaseModel):

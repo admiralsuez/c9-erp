@@ -46,6 +46,7 @@ export const InventoryDetailPage: React.FC = () => {
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [quantityChangeConfirm, setQuantityChangeConfirm] = useState(false);
   const [formError, setFormError] = useState('');
   const [editForm, setEditForm] = useState({
     name: '',
@@ -56,6 +57,8 @@ export const InventoryDetailPage: React.FC = () => {
     description: '',
     minimum_quantity: 0,
     opening_quantity: 0,
+    expiry_date: '',
+    allow_no_expiry: true,
   });
   const [showSerialMgmt, setShowSerialMgmt] = useState(false);
   const [serialMgmtMode, setSerialMgmtMode] = useState<'generate' | 'import'>('import');
@@ -101,6 +104,8 @@ export const InventoryDetailPage: React.FC = () => {
       description: item.description || '',
       minimum_quantity: Number(item.minimum_quantity),
       opening_quantity: Number(item.current_quantity),
+      expiry_date: item.expiry_date || '',
+      allow_no_expiry: item.allow_no_expiry !== false,
     });
     setFormError('');
     setIsEditMode(true);
@@ -119,6 +124,12 @@ export const InventoryDetailPage: React.FC = () => {
       return;
     }
 
+    const quantityChanged = editForm.opening_quantity !== Number(item?.current_quantity);
+    if (quantityChanged && !quantityChangeConfirm) {
+      setQuantityChangeConfirm(true);
+      return;
+    }
+
     updateItem(
       {
         itemId,
@@ -130,10 +141,15 @@ export const InventoryDetailPage: React.FC = () => {
           description: editForm.description || undefined,
           minimum_quantity: editForm.minimum_quantity,
           current_quantity: editForm.opening_quantity,
+          expiry_date: editForm.expiry_date || undefined,
+          allow_no_expiry: editForm.allow_no_expiry,
         },
       },
       {
-        onSuccess: () => setIsEditMode(false),
+        onSuccess: () => {
+          setIsEditMode(false);
+          setQuantityChangeConfirm(false);
+        },
         onError: (err: any) => setFormError(getApiError(err, 'Failed to update item')),
       }
     );
@@ -682,6 +698,36 @@ export const InventoryDetailPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Section 4: Expiry Management */}
+            <div className="space-y-4">
+              <h3 className="text-md font-medium text-neutral-900">Expiry Management</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={formLabel}>Expiry Date (Optional)</label>
+                  <p className="text-xs text-neutral-500 mb-1">Leave empty if item has no expiry</p>
+                  <input
+                    type="date"
+                    value={editForm.expiry_date ? editForm.expiry_date.substring(0, 10) : ''}
+                    onChange={(e) => setEditForm({ ...editForm, expiry_date: e.target.value ? new Date(e.target.value).toISOString() : '' })}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isUpdating}
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer pt-7">
+                    <input
+                      type="checkbox"
+                      checked={editForm.allow_no_expiry}
+                      onChange={(e) => setEditForm({ ...editForm, allow_no_expiry: e.target.checked })}
+                      className="w-4 h-4 rounded border-neutral-300"
+                      disabled={isUpdating}
+                    />
+                    <span className="text-sm text-neutral-700">Allow items without expiry date</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <div className="flex gap-2 justify-end pt-4 border-t border-neutral-200">
               <Button
                 type="button"
@@ -1083,6 +1129,41 @@ export const InventoryDetailPage: React.FC = () => {
             </Card>
           )}
         </>
+      )}
+
+      {/* Quantity Change Confirmation Modal */}
+      {quantityChangeConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card padding="lg" className="max-w-md w-full mx-4">
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-neutral-900">Confirm Quantity Change</h3>
+                  <p className="text-sm text-neutral-600 mt-1">
+                    You are changing the quantity from <span className="font-medium">{Number(item?.current_quantity)}</span> to <span className="font-medium">{editForm.opening_quantity}</span>. This will create an audit transaction. Continue?
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button
+                  type="button"
+                  onClick={() => setQuantityChangeConfirm(false)}
+                  className="px-4 py-2 border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleUpdate}
+                  className="px-4 py-2 bg-warning text-white hover:bg-warning/90"
+                >
+                  Confirm Change
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );

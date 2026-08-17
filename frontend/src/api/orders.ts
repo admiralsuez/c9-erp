@@ -47,7 +47,9 @@ export interface OrderResponse {
   status: string;
   remarks?: string;
   delivery_address?: string;
+  challan_book_number?: string;
   created_by?: number;
+  approver_id?: number;
   created_at: string;
   updated_at: string;
   items: OrderItemResponse[];
@@ -75,6 +77,7 @@ export interface OrderCreateRequest {
   items: OrderItemRequest[];
   remarks?: string;
   delivery_address?: string;
+  challan_book_number?: string;
 }
 
 export interface OrderUpdateRequest {
@@ -82,6 +85,7 @@ export interface OrderUpdateRequest {
   items?: OrderItemRequest[];
   remarks?: string;
   delivery_address?: string;
+  challan_book_number?: string;
 }
 
 export const ordersApi = {

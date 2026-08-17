@@ -652,7 +652,7 @@ def update_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.edit"))
 ):
-    """Update item metadata (NOT quantities)."""
+    """Update item metadata and optionally quantities."""
     item = db.query(InventoryItem).filter(
         InventoryItem.id == item_id,
         InventoryItem.deleted_at == None
@@ -665,6 +665,39 @@ def update_item(
         )
     
     update_data = item_data.model_dump(exclude_unset=True)
+    
+    # Handle quantity changes with transaction logging
+    if 'current_quantity' in update_data:
+        new_quantity = Decimal(str(update_data['current_quantity']))
+        old_quantity = item.current_quantity
+        
+        if new_quantity != old_quantity:
+            # Log transaction for audit trail
+            quantity_change = new_quantity - old_quantity
+            transaction = InventoryTransaction(
+                item_id=item_id,
+                transaction_type="correction",
+                previous_quantity=old_quantity,
+                change_quantity=quantity_change,
+                new_quantity=new_quantity,
+                reason="Quantity adjusted via editing",
+                created_by=current_user.id
+            )
+            db.add(transaction)
+            item.current_quantity = new_quantity
+    
+    # Auto-check expiry status if expiry_date is provided or exists
+    if 'expiry_date' in update_data or item.expiry_date:
+        expiry_date = update_data.get('expiry_date', item.expiry_date)
+        if expiry_date:
+            from datetime import datetime
+            from pytz import UTC
+            today = datetime.now(UTC).date()
+            if expiry_date.date() <= today:
+                update_data['stock_status'] = 'expired'
+            elif 'stock_status' not in update_data and item.stock_status == 'expired':
+                # Keep current status if not explicitly changed
+                pass
     
     # Validate one-level parent on update
     if 'parent_id' in update_data and update_data['parent_id'] is not None:
@@ -724,9 +757,9 @@ def update_item(
                 )
                 db.add(attr)
     
-    # Exclude attributes from direct setattr (handled above), keep is_container
+    # Exclude attributes and current_quantity from direct setattr (handled above)
     for field in update_data:
-        if field == 'attributes':
+        if field in ('attributes', 'current_quantity'):
             continue
         value = update_data[field]
         setattr(item, field, value)

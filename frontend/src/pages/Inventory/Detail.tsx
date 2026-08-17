@@ -473,9 +473,11 @@ export const InventoryDetailPage: React.FC = () => {
                       }
                     );
                   }
-                  // After image upload, refetch to get updated images
+                  // After image upload, wait a moment then refetch to get updated images
                   if (data.front_image_url || data.back_image_url) {
-                    refetch();
+                    setTimeout(() => {
+                      refetch();
+                    }, 500);
                   }
                 }}
                 isUpdating={isUpdating}

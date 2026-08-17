@@ -37,9 +37,9 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-erp.thecloud9corp.com,localhost,127.0.0.1}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@cloud9.local}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-Admin@12345}
-    # Bind to localhost only - caddy is the public entrypoint
+    # Backend listens on all interfaces within docker network
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy

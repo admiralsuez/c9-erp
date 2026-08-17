@@ -61,6 +61,21 @@ class InventoryItem(Base):
         UniqueConstraint("sku", name="uq_inventory_sku"),
     )
 
+    def _latest_image_url(self, image_type: str):
+        """Return the most recent image URL of the given type, or None."""
+        imgs = [img for img in self.images if img.image_type == image_type]
+        if not imgs:
+            return None
+        return max(imgs, key=lambda i: i.id).image_url
+
+    @property
+    def front_image_url(self):
+        return self._latest_image_url("front")
+
+    @property
+    def back_image_url(self):
+        return self._latest_image_url("back")
+
 
 class InventoryItemAttribute(Base):
     __tablename__ = "inventory_item_attributes"

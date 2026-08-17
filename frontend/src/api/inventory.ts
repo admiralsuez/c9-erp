@@ -21,6 +21,8 @@ export interface InventoryItemResponse {
   bin_id?: number;
   description?: string;
   image_url?: string;
+  front_image_url?: string;
+  back_image_url?: string;
   parent_id?: number;
   children?: InventoryItemResponse[];
   is_active: boolean;

@@ -626,7 +626,8 @@ def get_item(
 ):
     """Get item details including transaction history, images, and serial numbers."""
     item = db.query(InventoryItem).options(
-        selectinload(InventoryItem.children),
+        selectinload(InventoryItem.children).selectinload(InventoryItem.images),
+        selectinload(InventoryItem.children).selectinload(InventoryItem.attributes),
         selectinload(InventoryItem.parent),
         selectinload(InventoryItem.attributes),
         selectinload(InventoryItem.images),

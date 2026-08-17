@@ -53,7 +53,10 @@ class ImageUploadService:
             self.cdn_url = settings.DO_SPACES_CDN_URL or settings.DO_SPACES_ENDPOINT
         else:
             logger.info("Using local disk storage for images (S3 not configured)")
-            self.upload_dir = Path(os.getenv('UPLOAD_DIR', './uploads/images'))
+            # Save under backend/static/uploads/images so the FastAPI /static mount
+            # (main.py) serves the files at /static/uploads/images/...
+            _default_dir = Path(__file__).resolve().parents[2] / "static" / "uploads" / "images"
+            self.upload_dir = Path(os.getenv('UPLOAD_DIR', str(_default_dir)))
             self.upload_dir.mkdir(parents=True, exist_ok=True)
             self.s3_client = None
     

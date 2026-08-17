@@ -104,6 +104,8 @@ class InventoryItemResponse(InventoryItemBase):
     updated_at: datetime
     children: List['InventoryItemResponse'] = []
     attributes: Optional[dict] = None
+    front_image_url: Optional[str] = None
+    back_image_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
 

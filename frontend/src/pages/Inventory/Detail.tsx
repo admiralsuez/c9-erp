@@ -760,6 +760,35 @@ export const InventoryDetailPage: React.FC = () => {
             </div>
           </Card>
 
+          {/* Item Photos */}
+          {(item.front_image_url || item.back_image_url) && (
+            <Card padding="lg">
+              <h3 className="text-lg font-semibold text-neutral-900 mb-4">Item Photos</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+                {item.front_image_url && (
+                  <div>
+                    <p className="text-sm text-neutral-600 font-medium mb-2">Front</p>
+                    <img
+                      src={item.front_image_url}
+                      alt="Front"
+                      className="w-full h-64 object-cover rounded-lg border border-neutral-200"
+                    />
+                  </div>
+                )}
+                {item.back_image_url && (
+                  <div>
+                    <p className="text-sm text-neutral-600 font-medium mb-2">Back</p>
+                    <img
+                      src={item.back_image_url}
+                      alt="Back"
+                      className="w-full h-64 object-cover rounded-lg border border-neutral-200"
+                    />
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
           {/* Stock Actions */}
           <Card padding="lg">
             <div className="flex items-center justify-between mb-4">

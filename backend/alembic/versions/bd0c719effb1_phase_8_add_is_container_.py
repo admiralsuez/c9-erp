@@ -50,7 +50,15 @@ def upgrade() -> None:
     if not _has_column('inventory_items', 'is_container'):
         op.add_column('inventory_items', sa.Column('is_container', sa.Boolean(), nullable=False, server_default=sa.false()))
     
-    op.create_foreign_key(None, 'inventory_items', 'inventory_items', ['parent_id'], ['id'])
+    # Check if FK already exists before creating
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    fks = [fk['name'] for fk in inspector.get_foreign_keys('inventory_items')]
+    if not any('parent_id' in str(fk) for fk in fks):
+        try:
+            op.create_foreign_key(None, 'inventory_items', 'inventory_items', ['parent_id'], ['id'])
+        except Exception:
+            pass  # FK might already exist
     # ### end Alembic commands ###
 
 

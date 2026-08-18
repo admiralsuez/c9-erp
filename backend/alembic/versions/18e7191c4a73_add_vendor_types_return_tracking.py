@@ -64,7 +64,10 @@ def upgrade() -> None:
     if not column_exists('vendors', 'vendor_type_id'):
         op.add_column('vendors', sa.Column('vendor_type_id', sa.Integer(), nullable=True))
         if table_exists('vendor_types'):
-            op.create_foreign_key('fk_vendors_vendor_type', 'vendors', 'vendor_types', ['vendor_type_id'], ['id'])
+            try:
+                op.create_foreign_key('fk_vendors_vendor_type', 'vendors', 'vendor_types', ['vendor_type_id'], ['id'])
+            except Exception:
+                pass  # FK might already exist
     # ### end Alembic commands ###
 
 

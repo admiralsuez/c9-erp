@@ -17,16 +17,33 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add challan_book_number to documents table
-    op.add_column('documents', sa.Column('challan_book_number', sa.String(50), nullable=True))
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
     
-    # Add return_reason and return_status to order_items table
-    op.add_column('order_items', sa.Column('return_reason', sa.String(50), nullable=True))
-    op.add_column('order_items', sa.Column('return_status', sa.String(50), nullable=True))
+    # Check and add challan_book_number to documents table
+    docs_cols = [c["name"] for c in inspector.get_columns("documents")]
+    if "challan_book_number" not in docs_cols:
+        op.add_column('documents', sa.Column('challan_book_number', sa.String(50), nullable=True))
+    
+    # Check and add return_reason and return_status to order_items table
+    items_cols = [c["name"] for c in inspector.get_columns("order_items")]
+    if "return_reason" not in items_cols:
+        op.add_column('order_items', sa.Column('return_reason', sa.String(50), nullable=True))
+    if "return_status" not in items_cols:
+        op.add_column('order_items', sa.Column('return_status', sa.String(50), nullable=True))
 
 
 def downgrade() -> None:
-    # Remove columns
-    op.drop_column('documents', 'challan_book_number')
-    op.drop_column('order_items', 'return_reason')
-    op.drop_column('order_items', 'return_status')
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    
+    # Remove columns if they exist
+    docs_cols = [c["name"] for c in inspector.get_columns("documents")]
+    if "challan_book_number" in docs_cols:
+        op.drop_column('documents', 'challan_book_number')
+    
+    items_cols = [c["name"] for c in inspector.get_columns("order_items")]
+    if "return_reason" in items_cols:
+        op.drop_column('order_items', 'return_reason')
+    if "return_status" in items_cols:
+        op.drop_column('order_items', 'return_status')

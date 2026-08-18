@@ -8,6 +8,7 @@ import { useCreateOrder } from '../../hooks/useOrders';
 import { useVendors, useCreateVendor } from '../../hooks/useVendors';
 import { useInventory } from '../../hooks/useInventory';
 import { inventoryApi } from '../../api/inventory';
+import { VendorAddressSelector } from '../../components/VendorAddressSelector';
 import type { OrderCreateRequest, OrderItemRequest } from '../../api/orders';
 import type { SerialNumberResponse, InventoryItemResponse } from '../../api/inventory';
 
@@ -23,11 +24,8 @@ export const OrderCreatePage: React.FC = () => {
   const [vendorId, setVendorId] = useState<number | ''>('');
   const [remarks, setRemarks] = useState('');
   const [challanBookNumber, setChallanBookNumber] = useState('');
-  const [sameAsVendorAddress, setSameAsVendorAddress] = useState(false);
-  const [deliveryName, setDeliveryName] = useState('');
-  const [deliveryPhone, setDeliveryPhone] = useState('');
-  const [deliveryAddressText, setDeliveryAddressText] = useState('');
-  const [deliveryPincode, setDeliveryPincode] = useState('');
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+  const [customDeliveryAddress, setCustomDeliveryAddress] = useState('');
   const [items, setItems] = useState<LocalOrderItem[]>([]);
   const [selectedParentId, setSelectedParentId] = useState<number | ''>('');
   const [selectedVariantId, setSelectedVariantId] = useState<number | ''>('');
@@ -201,10 +199,13 @@ export const OrderCreatePage: React.FC = () => {
   };
 
   const buildDeliveryAddress = (): string | undefined => {
-    if (sameAsVendorAddress || (!deliveryName && !deliveryAddressText)) {
-      return undefined;
+    // If custom address is selected, use it
+    if (customDeliveryAddress.trim()) {
+      return customDeliveryAddress.trim();
     }
-    return [deliveryName, deliveryPhone, deliveryAddressText, deliveryPincode].filter(Boolean).join(' | ');
+    // If a vendor address is selected, the backend will handle it
+    // For now, we return undefined to let vendor's address be used
+    return undefined;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -212,19 +213,6 @@ export const OrderCreatePage: React.FC = () => {
 
     if (!vendorId) { toast.error('Please select a vendor', { duration: 2000 }); return; }
     if (items.length === 0) { toast.error('Please add at least one item', { duration: 2000 }); return; }
-    if (sameAsVendorAddress && !selectedVendor?.address?.trim()) {
-      toast.error('Vendor has no address. Uncheck "Same as vendor address" or add an address to the vendor.', { duration: 3000 }); return;
-    }
-
-    if (!sameAsVendorAddress && deliveryName.trim()) {
-      const phoneDigits = deliveryPhone.replace(/\D/g, '');
-      if (deliveryPhone.trim() && phoneDigits.length !== 10) {
-        toast.error('Delivery phone must be exactly 10 digits', { duration: 2000 }); return;
-      }
-      if (deliveryPincode.trim() && !/^\d{6}$/.test(deliveryPincode)) {
-        toast.error('Delivery pincode must be exactly 6 digits', { duration: 2000 }); return;
-      }
-    }
 
     const orderData: OrderCreateRequest = {
       vendor_id: vendorId as number,
@@ -575,52 +563,21 @@ export const OrderCreatePage: React.FC = () => {
           )}
         </Card>
 
+        {/* Delivery Address Section */}
+        {selectedVendor && (
+          <VendorAddressSelector
+            vendor={selectedVendor}
+            selectedAddressId={selectedAddressId}
+            onAddressSelect={setSelectedAddressId}
+            customAddress={customDeliveryAddress}
+            onCustomAddressChange={setCustomDeliveryAddress}
+          />
+        )}
+
         {/* Additional Info */}
         <Card padding="lg">
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Additional Information</h2>
           <div className="space-y-4">
-            <div>
-              <label className={formLabel}>Delivery Address</label>
-              <label className={`flex items-center gap-2 mb-3 ${selectedVendor?.address ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-                <input
-                  type="checkbox"
-                  checked={sameAsVendorAddress}
-                  onChange={(e) => {
-                    if (!selectedVendor?.address) return;
-                    setSameAsVendorAddress(e.target.checked);
-                    if (!e.target.checked) { setDeliveryName(''); setDeliveryPhone(''); setDeliveryAddressText(''); setDeliveryPincode(''); }
-                  }}
-                  disabled={!selectedVendor?.address}
-                  className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
-                />
-                <span className={`text-sm ${selectedVendor?.address ? 'text-neutral-700' : 'text-neutral-400'}`}>
-                  Same as vendor address
-                  {!selectedVendor?.address && ' (vendor has no address)'}
-                </span>
-              </label>
-              {!sameAsVendorAddress && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-neutral-700 mb-1">Recipient Name</label>
-                      <input type="text" value={deliveryName} onChange={(e) => setDeliveryName(e.target.value)} placeholder="Recipient name" className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-neutral-700 mb-1">Phone (10 digits)</label>
-                      <input type="tel" value={deliveryPhone} onChange={(e) => setDeliveryPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="9876543210" maxLength={10} className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-700 mb-1">Address</label>
-                    <textarea value={deliveryAddressText} onChange={(e) => setDeliveryAddressText(e.target.value)} placeholder="Street, area, landmark, city..." rows={2} className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm" />
-                  </div>
-                  <div className="sm:w-1/3">
-                    <label className="block text-xs font-medium text-neutral-700 mb-1">Pincode (6 digits)</label>
-                    <input type="text" value={deliveryPincode} onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="400001" maxLength={6} className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
-                  </div>
-                </div>
-              )}
-            </div>
 
             <div>
               <label className={formLabel}>Remarks</label>

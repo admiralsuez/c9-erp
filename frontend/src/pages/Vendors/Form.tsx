@@ -2,13 +2,25 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button } from '../../components/ui';
 import { cardErrorPadded, formLabel } from '../../styles/classNames';
-import { ArrowLeft, Loader, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Loader, AlertCircle, Plus, Trash2, MapPin } from 'lucide-react';
 import { useCreateVendor } from '../../hooks/useVendors';
 import type { VendorCreateRequest } from '../../api/vendors';
+
+interface AddressEntry {
+  id: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  is_primary: boolean;
+}
 
 export const VendorFormPage: React.FC = () => {
   const navigate = useNavigate();
   const [formError, setFormError] = useState('');
+  const [addresses, setAddresses] = useState<AddressEntry[]>([
+    { id: '0', address: '', city: '', state: '', pincode: '', is_primary: true }
+  ]);
   const [formData, setFormData] = useState<VendorCreateRequest>({
     name: '',
     vendor_type: '',
@@ -20,6 +32,14 @@ export const VendorFormPage: React.FC = () => {
     state: '',
     gst: '',
     notes: '',
+  });
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [newAddress, setNewAddress] = useState<Omit<AddressEntry, 'id'> & { id?: string }>({
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+    is_primary: false
   });
 
   const { mutate: createVendor, isPending } = useCreateVendor((vendor) => {

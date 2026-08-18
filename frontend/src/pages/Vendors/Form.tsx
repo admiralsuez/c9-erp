@@ -186,10 +186,11 @@ export const VendorFormPage: React.FC = () => {
           </div>
         </Card>
 
-        {/* Section 3: Address */}
+        {/* Section 3: Primary Address */}
         <Card padding="lg">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4">
-            Address
+          <h2 className="text-lg font-semibold text-neutral-900 mb-4 flex items-center gap-2">
+            <MapPin className="w-5 h-5" />
+            Primary Address
           </h2>
           <div className="space-y-4">
             <div>
@@ -207,7 +208,7 @@ export const VendorFormPage: React.FC = () => {
                 disabled={isPending}
               />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className={formLabel}>
                   City
@@ -238,8 +239,152 @@ export const VendorFormPage: React.FC = () => {
                   disabled={isPending}
                 />
               </div>
+              <div>
+                <label className={formLabel}>
+                  Pincode
+                </label>
+                <input
+                  type="text"
+                  value={formData.pincode || ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, pincode: e.target.value })
+                  }
+                  placeholder="e.g., 400001"
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  disabled={isPending}
+                />
+              </div>
             </div>
           </div>
+        </Card>
+
+        {/* Section 3b: Additional Addresses */}
+        <Card padding="lg">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-neutral-900 flex items-center gap-2">
+              <MapPin className="w-5 h-5" />
+              Additional Delivery Addresses
+            </h2>
+            {!showAddressForm && (
+              <button
+                type="button"
+                onClick={() => setShowAddressForm(true)}
+                className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
+              >
+                <Plus className="w-4 h-4" />
+                Add Address
+              </button>
+            )}
+          </div>
+
+          {/* Address Add Form */}
+          {showAddressForm && (
+            <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-lg mb-4 space-y-4">
+              <div>
+                <label className={formLabel}>Address</label>
+                <textarea
+                  value={newAddress.address}
+                  onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
+                  placeholder="e.g., 456 Warehouse Road"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  disabled={isPending}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={newAddress.city}
+                    onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                    placeholder="City"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isPending}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">State</label>
+                  <input
+                    type="text"
+                    value={newAddress.state}
+                    onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                    placeholder="State"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isPending}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">Pincode</label>
+                  <input
+                    type="text"
+                    value={newAddress.pincode}
+                    onChange={(e) => setNewAddress({ ...newAddress, pincode: e.target.value })}
+                    placeholder="Pincode"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isPending}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddressForm(false);
+                    setNewAddress({ address: '', city: '', state: '', pincode: '', is_primary: false });
+                  }}
+                  className="px-3 py-1.5 text-sm border border-neutral-300 rounded text-neutral-700 hover:bg-neutral-100"
+                  disabled={isPending}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newAddress.address.trim()) {
+                      setAddresses([...addresses, { ...newAddress, id: Date.now().toString() }]);
+                      setNewAddress({ address: '', city: '', state: '', pincode: '', is_primary: false });
+                      setShowAddressForm(false);
+                    }
+                  }}
+                  className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50"
+                  disabled={isPending || !newAddress.address.trim()}
+                >
+                  Add Address
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Addresses List */}
+          {addresses.length > 0 ? (
+            <div className="space-y-2">
+              {addresses.map((addr) => (
+                <div key={addr.id} className="flex items-start justify-between p-3 bg-neutral-50 border border-neutral-200 rounded-lg">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-neutral-900">{addr.address}</p>
+                    <p className="text-xs text-neutral-600 mt-0.5">
+                      {addr.city && `${addr.city}`}
+                      {addr.state && `, ${addr.state}`}
+                      {addr.pincode && ` - ${addr.pincode}`}
+                    </p>
+                  </div>
+                  {!addr.is_primary && (
+                    <button
+                      type="button"
+                      onClick={() => setAddresses(addresses.filter(a => a.id !== addr.id))}
+                      className="p-1 text-error hover:bg-error/10 rounded transition-colors ml-2"
+                      disabled={isPending}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-neutral-500 text-sm text-center py-3">No additional addresses added yet</p>
+          )}
         </Card>
 
         {/* Section 4: Tax Information */}

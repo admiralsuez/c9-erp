@@ -5,7 +5,17 @@ import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { ArrowLeft, Edit2, Trash2, Loader, AlertCircle } from 'lucide-react';
 import { useVendor, useUpdateVendor, useDeleteVendor } from '../../hooks/useVendors';
 import { formatDate } from '../../utils/format';
+import { MapPin, Plus } from 'lucide-react';
 import type { VendorCreateRequest } from '../../api/vendors';
+
+interface AddressEntry {
+  id: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  is_primary: boolean;
+}
 
 export const VendorDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -15,6 +25,17 @@ export const VendorDetailPage: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [formError, setFormError] = useState('');
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [addresses, setAddresses] = useState<AddressEntry[]>([
+    { id: '0', address: '', city: '', state: '', pincode: '', is_primary: true }
+  ]);
+  const [newAddress, setNewAddress] = useState<Omit<AddressEntry, 'id'> & { id?: string }>({
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+    is_primary: false
+  });
 
   // Form state for editing
   const [formData, setFormData] = useState<VendorCreateRequest>({
@@ -49,6 +70,25 @@ export const VendorDetailPage: React.FC = () => {
         gst: vendor.gst || '',
         notes: vendor.notes || '',
       });
+      // Load child addresses if available
+      if (vendor.children && vendor.children.length > 0) {
+        const childAddresses = vendor.children.map((child) => ({
+          id: child.id.toString(),
+          address: child.address || '',
+          city: child.city || '',
+          state: child.state || '',
+          pincode: child.pincode || '',
+          is_primary: false,
+        }));
+        setAddresses([{
+          id: vendor.id.toString(),
+          address: vendor.address || '',
+          city: vendor.city || '',
+          state: vendor.state || '',
+          pincode: vendor.pincode || '',
+          is_primary: true,
+        }, ...childAddresses]);
+      }
     }
   }, [vendor]);
 

@@ -264,8 +264,9 @@ export const VendorFormPage: React.FC = () => {
             <h2 className="text-lg font-semibold text-neutral-900 flex items-center gap-2">
               <MapPin className="w-5 h-5" />
               Additional Delivery Addresses
+              <span className="text-sm font-normal text-neutral-500">({addresses.length - 1}/20)</span>
             </h2>
-            {!showAddressForm && (
+            {!showAddressForm && addresses.length < 21 && (
               <button
                 type="button"
                 onClick={() => setShowAddressForm(true)}
@@ -280,8 +281,12 @@ export const VendorFormPage: React.FC = () => {
           {/* Address Add Form */}
           {showAddressForm && (
             <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-lg mb-4 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium text-neutral-900">Add New Address</h4>
+                <span className="text-xs text-neutral-500">{addresses.length - 1}/20</span>
+              </div>
               <div>
-                <label className={formLabel}>Address</label>
+                <label className="block text-xs font-medium text-neutral-700 mb-1">Address</label>
                 <textarea
                   value={newAddress.address}
                   onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
@@ -341,16 +346,16 @@ export const VendorFormPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    if (newAddress.address.trim()) {
+                    if (newAddress.address.trim() && addresses.length < 21) {
                       setAddresses([...addresses, { ...newAddress, id: Date.now().toString() }]);
                       setNewAddress({ address: '', city: '', state: '', pincode: '', is_primary: false });
                       setShowAddressForm(false);
                     }
                   }}
                   className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50"
-                  disabled={isPending || !newAddress.address.trim()}
+                  disabled={isPending || !newAddress.address.trim() || addresses.length >= 21}
                 >
-                  Add Address
+                  {addresses.length >= 21 ? 'Limit reached' : 'Add Address'}
                 </button>
               </div>
             </div>

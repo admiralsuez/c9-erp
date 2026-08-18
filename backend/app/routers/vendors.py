@@ -58,7 +58,10 @@ def list_vendors(
     current_user: User = Depends(get_current_user)
 ):
     """List vendors with optional search - returns paginated response."""
-    query = db.query(Vendor).filter(Vendor.deleted_at == None)
+    query = db.query(Vendor).filter(
+        Vendor.deleted_at == None,
+        Vendor.parent_id == None  # Child addresses not listed as standalone vendors
+    )
     
     if search:
         normalized_search = normalize_vendor_name(search)
@@ -94,31 +97,34 @@ def create_vendor(
     """Create a new vendor with duplicate detection."""
     normalized_name = normalize_vendor_name(vendor_data.name)
     
-    # Check for exact match
-    existing = db.query(Vendor).filter(
-        Vendor.name_normalized == normalized_name,
-        Vendor.deleted_at == None
-    ).first()
-    
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Vendor with similar name already exists: {existing.name}"
-        )
-    
-    # Check for fuzzy matches and block with 409
-    similar = find_similar_vendors(vendor_data.name, db)
-    if similar:
-        similar_names = [v.name for v in similar]
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Similar vendor already exists: {', '.join(similar_names)}"
-        )
+    # Child addresses (parent_id set) skip vendor-name dedup checks
+    if vendor_data.parent_id is None:
+        # Check for exact match
+        existing = db.query(Vendor).filter(
+            Vendor.name_normalized == normalized_name,
+            Vendor.deleted_at == None
+        ).first()
+        
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Vendor with similar name already exists: {existing.name}"
+            )
+        
+        # Check for fuzzy matches and block with 409
+        similar = find_similar_vendors(vendor_data.name, db)
+        if similar:
+            similar_names = [v.name for v in similar]
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Similar vendor already exists: {', '.join(similar_names)}"
+            )
     
     vendor = Vendor(
         name=vendor_data.name,
         name_normalized=normalized_name,
         vendor_type=vendor_data.vendor_type,
+        vendor_type_id=vendor_data.vendor_type_id,
         contact_person=vendor_data.contact_person,
         phone=vendor_data.phone,
         email=vendor_data.email,
@@ -127,7 +133,8 @@ def create_vendor(
         state=vendor_data.state,
         pincode=vendor_data.pincode,
         gst=vendor_data.gst,
-        notes=vendor_data.notes
+        notes=vendor_data.notes,
+        parent_id=vendor_data.parent_id
     )
     db.add(vendor)
     db.commit()

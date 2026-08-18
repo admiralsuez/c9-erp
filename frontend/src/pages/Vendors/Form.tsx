@@ -4,7 +4,7 @@ import { Card, Button } from '../../components/ui';
 import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { ArrowLeft, Loader, AlertCircle, Plus, Trash2, MapPin } from 'lucide-react';
 import { useCreateVendor } from '../../hooks/useVendors';
-import type { VendorCreateRequest } from '../../api/vendors';
+import { vendorApi, type VendorCreateRequest } from '../../api/vendors';
 
 interface AddressEntry {
   id: string;
@@ -42,7 +42,20 @@ export const VendorFormPage: React.FC = () => {
     is_primary: false
   });
 
-  const { mutate: createVendor, isPending } = useCreateVendor((vendor) => {
+  const { mutate: createVendor, isPending } = useCreateVendor(async (vendor) => {
+    const additional = addresses.filter((a) => !a.is_primary && a.address.trim());
+    for (let i = 0; i < additional.length; i++) {
+      const addr = additional[i];
+      await vendorApi.create({
+        name: `${formData.name} - Address ${i + 2}`,
+        vendor_type: formData.vendor_type,
+        address: addr.address,
+        city: addr.city,
+        state: addr.state,
+        pincode: addr.pincode,
+        parent_id: vendor.id,
+      });
+    }
     navigate(`/vendors/${vendor.id}`);
   });
 

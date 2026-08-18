@@ -264,7 +264,11 @@ export const OrderCreatePage: React.FC = () => {
                 <>
                 <select
                   value={vendorId}
-                  onChange={(e) => setVendorId(e.target.value ? Number(e.target.value) : '')}
+                  onChange={(e) => {
+                    setVendorId(e.target.value ? Number(e.target.value) : '');
+                    setSelectedAddressId(null);
+                    setCustomDeliveryAddress('');
+                  }}
                   className="form-input w-full border border-neutral-300 rounded-lg px-3 py-2"
                   required
                 >
@@ -568,7 +572,23 @@ export const OrderCreatePage: React.FC = () => {
           <VendorAddressSelector
             vendor={selectedVendor}
             selectedAddressId={selectedAddressId}
-            onAddressSelect={setSelectedAddressId}
+            onAddressSelect={(addressId) => {
+              setSelectedAddressId(addressId);
+              if (addressId === null) return;
+              const isPrimary = addressId === selectedVendor.id;
+              const selected = isPrimary
+                ? selectedVendor
+                : selectedVendor.children?.find((c) => c.id === addressId);
+              if (selected) {
+                const parts = [
+                  selected.address,
+                  selected.city,
+                  selected.state,
+                  selected.pincode,
+                ].filter(Boolean);
+                setCustomDeliveryAddress(parts.join(', '));
+              }
+            }}
             customAddress={customDeliveryAddress}
             onCustomAddressChange={setCustomDeliveryAddress}
           />

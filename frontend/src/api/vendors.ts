@@ -40,6 +40,7 @@ export interface VendorCreateRequest {
   pincode?: string;
   gst?: string;
   notes?: string;
+  parent_id?: number | null;
 }
 
 export const vendorApi = {

@@ -24,6 +24,9 @@ export const useCreateVendor = (onSuccess?: (vendor: any) => void) => {
     mutationFn: (data: any) => vendorApi.create(data),
     onSuccess: (vendor) => {
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      if (vendor?.parent_id) {
+        queryClient.invalidateQueries({ queryKey: ['vendor', vendor.parent_id] });
+      }
       toast.success('Vendor created successfully');
       onSuccess?.(vendor);
     },
@@ -52,6 +55,7 @@ export const useDeleteVendor = () => {
     mutationFn: (vendorId: number) => vendorApi.delete(vendorId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor'] });
       toast.success('Vendor deleted successfully');
     },
     onError: (err: Error) => toast.error(err.message || 'Failed to delete vendor'),

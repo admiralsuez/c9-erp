@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from datetime import datetime
 
 
@@ -21,11 +21,12 @@ class VendorBase(BaseModel):
 
 
 class VendorCreate(VendorBase):
-    pass
+    parent_id: Optional[int] = None
 
 
 class VendorUpdate(BaseModel):
     name: Optional[str] = None
+    parent_id: Optional[int] = None
     vendor_type: Optional[str] = None
     vendor_type_id: Optional[int] = None
     contact_person: Optional[str] = None
@@ -45,9 +46,16 @@ class VendorResponse(VendorBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    deleted_at: Optional[datetime] = None
     children: List[VendorResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def filter_deleted_children(self) -> "VendorResponse":
+        if self.children:
+            self.children = [c for c in self.children if c.deleted_at is None]
+        return self
 
 
 class VendorSummaryResponse(VendorResponse):

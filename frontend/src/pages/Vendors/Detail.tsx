@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Button, ListLoadingState } from '../../components/ui';
 import { cardErrorPadded, formLabel } from '../../styles/classNames';
-import { ArrowLeft, Edit2, Trash2, Loader, AlertCircle } from 'lucide-react';
-import { useVendor, useUpdateVendor, useDeleteVendor } from '../../hooks/useVendors';
-import { formatDate } from '../../utils/format';
+import { ArrowLeft, Edit2, Trash2, Loader, AlertCircle, Plus, MapPin } from 'lucide-react';
+import { useVendor, useUpdateVendor, useDeleteVendor, useCreateVendor } from '../../hooks/useVendors';
 import type { VendorCreateRequest } from '../../api/vendors';
+import { formatDate } from '../../utils/format';
 
 export const VendorDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -15,6 +15,8 @@ export const VendorDetailPage: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [formError, setFormError] = useState('');
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [newAddress, setNewAddress] = useState({ address: '', city: '', state: '', pincode: '' });
 
   // Form state for editing
   const [formData, setFormData] = useState<VendorCreateRequest>({
@@ -33,6 +35,7 @@ export const VendorDetailPage: React.FC = () => {
   const { data: vendor, isLoading, error } = useVendor(vendorId);
   const { mutate: updateVendor, isPending: isUpdating } = useUpdateVendor();
   const { mutate: deleteVendor, isPending: isDeleting } = useDeleteVendor();
+  const { mutate: createChild, isPending: isCreatingChild } = useCreateVendor();
 
   // Populate form when vendor data loads
   React.useEffect(() => {
@@ -51,6 +54,52 @@ export const VendorDetailPage: React.FC = () => {
       });
     }
   }, [vendor]);
+
+  const addAddress = () => {
+    if (!vendorId) return;
+    if (!newAddress.address.trim()) {
+      setFormError('Address is required');
+      return;
+    }
+    createChild(
+      {
+        name: `${formData.name} - Address ${(vendor?.children?.length ?? 0) + 2}`,
+        vendor_type: formData.vendor_type,
+        address: newAddress.address,
+        city: newAddress.city,
+        state: newAddress.state,
+        pincode: newAddress.pincode,
+        parent_id: vendorId,
+      },
+      {
+        onSuccess: () => {
+          setNewAddress({ address: '', city: '', state: '', pincode: '' });
+          setShowAddressForm(false);
+          setFormError('');
+        },
+        onError: (error: any) => {
+          setFormError(
+            error?.response?.data?.detail ||
+            error?.message ||
+            'Failed to add address'
+          );
+        },
+      }
+    );
+  };
+
+  const removeAddress = (childId: number) => {
+    if (!childId) return;
+    deleteVendor(childId, {
+      onError: (error: any) => {
+        setFormError(
+          error?.response?.data?.detail ||
+          error?.message ||
+          'Failed to remove address'
+        );
+      },
+    });
+  };
 
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,6 +295,29 @@ export const VendorDetailPage: React.FC = () => {
                 <p className="text-neutral-900">{vendor.state || '—'}</p>
               </div>
             </div>
+
+            {/* Additional Delivery Addresses (view mode) */}
+            {vendor.children && vendor.children.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-neutral-200">
+                <h3 className="text-sm font-semibold text-neutral-900 mb-3 flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Additional Delivery Addresses
+                </h3>
+                <div className="space-y-2">
+                  {vendor.children.map((child) => (
+                    <div key={child.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg">
+                      <p className="text-sm font-medium text-neutral-900">{child.name}</p>
+                      <p className="text-xs text-neutral-600 mt-0.5">
+                        {child.address || '—'}
+                        {child.city && `, ${child.city}`}
+                        {child.state && `, ${child.state}`}
+                        {child.pincode && ` - ${child.pincode}`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </Card>
 
           {/* Tax Information */}
@@ -460,6 +532,126 @@ export const VendorDetailPage: React.FC = () => {
                 className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 disabled={isUpdating}
               />
+            </div>
+
+            {/* Additional Delivery Addresses (edit mode) */}
+            <div className="border-t border-neutral-200 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-neutral-900 flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Additional Delivery Addresses
+                  <span className="text-xs font-normal text-neutral-500">({vendor.children?.length ?? 0}/20)</span>
+                </h3>
+                {!showAddressForm && (vendor.children?.length ?? 0) < 20 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddressForm(true)}
+                    className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Address
+                  </button>
+                )}
+              </div>
+
+              {/* Add Address Form */}
+              {showAddressForm && (
+                <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-lg mb-4 space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-700 mb-1">Address</label>
+                    <textarea
+                      value={newAddress.address}
+                      onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      disabled={isCreatingChild}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-700 mb-1">City</label>
+                      <input
+                        type="text"
+                        value={newAddress.city}
+                        onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                        className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        disabled={isCreatingChild}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-700 mb-1">State</label>
+                      <input
+                        type="text"
+                        value={newAddress.state}
+                        onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                        className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        disabled={isCreatingChild}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-700 mb-1">Pincode</label>
+                      <input
+                        type="text"
+                        value={newAddress.pincode}
+                        onChange={(e) => setNewAddress({ ...newAddress, pincode: e.target.value })}
+                        className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        disabled={isCreatingChild}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddressForm(false);
+                        setNewAddress({ address: '', city: '', state: '', pincode: '' });
+                      }}
+                      className="px-3 py-1.5 text-sm border border-neutral-300 rounded text-neutral-700 hover:bg-neutral-100"
+                      disabled={isCreatingChild}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addAddress}
+                      disabled={isCreatingChild || !newAddress.address.trim()}
+                      className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 flex items-center gap-1"
+                    >
+                      {isCreatingChild && <Loader className="w-3.5 h-3.5 animate-spin" />}
+                      {isCreatingChild ? 'Adding...' : 'Add Address'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Existing Addresses List */}
+              {vendor.children && vendor.children.length > 0 ? (
+                <div className="space-y-2">
+                  {vendor.children.map((child) => (
+                    <div key={child.id} className="flex items-start justify-between p-3 bg-neutral-50 border border-neutral-200 rounded-lg">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-neutral-900">{child.name}</p>
+                        <p className="text-xs text-neutral-600 mt-0.5">
+                          {child.address || '—'}
+                          {child.city && `, ${child.city}`}
+                          {child.state && `, ${child.state}`}
+                          {child.pincode && ` - ${child.pincode}`}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAddress(child.id)}
+                        disabled={isDeleting}
+                        className="p-1 text-error hover:bg-error/10 rounded transition-colors ml-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-neutral-500 text-sm text-center py-2">No additional delivery addresses added yet</p>
+              )}
             </div>
 
             <div className="flex gap-3 justify-end">

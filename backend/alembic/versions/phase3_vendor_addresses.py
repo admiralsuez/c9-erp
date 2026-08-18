@@ -22,9 +22,9 @@ def upgrade() -> None:
     cols = [c["name"] for c in inspector.get_columns("vendors")]
 
     if "parent_id" not in cols:
-        op.add_column("vendors",
-            sa.Column("parent_id", sa.Integer(), sa.ForeignKey("vendors.id"), nullable=True))
-        op.create_index("idx_vendor_parent", "vendors", ["parent_id"])
+        with op.batch_alter_table("vendors") as batch_op:
+            batch_op.add_column(sa.Column("parent_id", sa.Integer(), sa.ForeignKey("vendors.id"), nullable=True))
+            batch_op.create_index("idx_vendor_parent", ["parent_id"])
 
 
 def downgrade() -> None:

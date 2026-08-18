@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 
+
 # ============ VENDOR TYPES ============
 class VendorType(Base):
     __tablename__ = "vendor_types"

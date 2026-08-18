@@ -18,12 +18,14 @@ export interface VendorResponse {
   address: string;
   city: string;
   state: string;
-  pincode: string;
+  pincode?: string;
   gst: string;
   notes: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  parent_id?: number | null;
+  children?: VendorResponse[];
 }
 
 export interface VendorCreateRequest {

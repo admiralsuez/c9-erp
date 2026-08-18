@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Button } from './ui';
-import { ChevronDown, MapPin, Plus } from 'lucide-react';
+import { Card } from './ui';
+import { MapPin, Plus } from 'lucide-react';
 import type { VendorResponse } from '../api/vendors';
 
 interface VendorAddressSelectorProps {
@@ -41,7 +41,7 @@ export const VendorAddressSelector: React.FC<VendorAddressSelectorProps> = ({
       pincode: vendor.pincode || '',
       is_primary: true,
     },
-    ...(vendor.children || []).map((child, idx) => ({
+    ...(vendor.children ? vendor.children.map((child: VendorResponse, idx: number) => ({
       id: child.id,
       name: `${child.name} (Address ${idx + 2})`,
       address: child.address || 'No address provided',
@@ -49,7 +49,7 @@ export const VendorAddressSelector: React.FC<VendorAddressSelectorProps> = ({
       state: child.state || '',
       pincode: child.pincode || '',
       is_primary: false,
-    })),
+    })) : []),
   ];
 
   const hasMultipleAddresses = addresses.length > 1;

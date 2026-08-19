@@ -228,3 +228,8 @@ alembic upgrade head
 ## License
 
 Internal use only.
+
+
+
+docker exec -i c9erp-postgres psql -U erp_user -d erp_db < /root/apps/c9-erp/backend/backups/auto_20260816_075118.sql
+	

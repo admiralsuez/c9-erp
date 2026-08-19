@@ -55,8 +55,7 @@ def optimize_order_query(query: Query[Order]) -> Query[Order]:
     return query.options(
         selectinload(Order.vendor),
         selectinload(Order.items).selectinload(OrderItem.item),
-        selectinload(Order.timeline),
-        selectinload(Order.documents),
+        selectinload(Order.timeline_entries),
         selectinload(Order.approver),
     )
 

@@ -230,6 +230,18 @@ alembic upgrade head
 Internal use only.
 
 
-
+// for dumping the database backup 
+step : 0
 docker exec -i c9erp-postgres psql -U erp_user -d erp_db < /root/apps/c9-erp/backend/backups/auto_20260816_075118.sql
+
+
+//if it gives the error then you need to drop the database first ,
+// but we need to terminate the process which is using the database first , 
+1. find the process which is using the database 
+docker exec -it c9erp-postgres psql -U erp_user -d postgres -c "SELECT pid, usename, application_name FROM pg_stat_activity WHERE datname='erp_db';"
+2. remove the connection from the database , 
+docker exec -it c9erp-postgres psql -U erp_user -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='erp_db';"
+
+
+// now try the step 0 again ,  
 	

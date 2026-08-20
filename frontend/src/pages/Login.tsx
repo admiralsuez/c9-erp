@@ -159,13 +159,6 @@ export const LoginPage: React.FC = () => {
             </button>
           </div>
         </Card>
-
-        {/* Demo Credentials */}
-        <div className="mt-6 p-4 bg-neutral-100 rounded-lg text-center text-xs text-neutral-600">
-          <p className="font-semibold mb-2">Demo Credentials</p>
-          <p>Email: admin@example.com</p>
-          <p>Password: (from .env or backend seed)</p>
-        </div>
       </div>
     </div>
   );

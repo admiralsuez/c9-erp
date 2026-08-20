@@ -5,7 +5,7 @@ export const authApi = {
    * Request password reset - sends reset link to email
    */
   requestPasswordReset: async (data: { email: string }) => {
-    const response = await apiClient.post('/auth/forgot-password', data);
+    const response = await apiClient.post('/auth/request-password-reset', data);
     return response.data;
   },
 

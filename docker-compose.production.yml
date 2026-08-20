@@ -66,31 +66,16 @@ services:
         # caddy reverse-proxies /api/* to backend. No mixed content, no CORS.
         VITE_API_URL: /api
     container_name: cloud9-frontend
-    # No port binding needed - Caddy accesses via internal network
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - cloud9-network
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: cloud9-caddy
-    environment:
-      DOMAIN: ${DOMAIN:-erp.thecloud9corp.com}
+    # Exposed on host so the server's main Caddy can reverse-proxy it.
+    # (The repo no longer bundles its own Caddy - the site is served by
+    #  the host's main Caddy, see ~/apps/caddy/Caddyfile.)
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - cloud9-network
+      - "5173:5173"
     depends_on:
       - backend
-      - frontend
     restart: unless-stopped
+    networks:
+      - cloud9-network
 
 volumes:
   postgres_data:
@@ -100,10 +85,6 @@ volumes:
   backend_backups:
     driver: local
   backend_logs:
-    driver: local
-  caddy_data:
-    driver: local
-  caddy_config:
     driver: local
 
 networks:

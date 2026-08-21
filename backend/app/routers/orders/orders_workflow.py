@@ -94,11 +94,11 @@ def approve_order(
 @router.post("/{order_id}/approve-with-signature", response_model=OrderResponse)
 def approve_with_signature(
     order_id: int,
-    body: dict = Body(..., embed=False),
+    signature_data: str = Query(default=""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    signature_data = body.get("signature_data", "")
+    signature_data = signature_data or ""
     """Approve order with e-signature. Auto-generates signed PDF."""
     order = db.query(Order).options(
         selectinload(Order.items).selectinload(OrderItem.item),

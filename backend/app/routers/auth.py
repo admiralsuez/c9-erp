@@ -284,7 +284,7 @@ def reset_password(
     # Create new access tokens for automatic login
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(user.id, db)
-
+    
     logger.info("PASSWORD RESET successful for %s from %s", user.email, ip)
     log_audit(db, user_id=user.id, action="password_reset_completed", 
               entity_type="user", entity_id=user.id, ip_address=ip)
@@ -298,3 +298,17 @@ def reset_password(
         "token_type": "bearer",
         "user": user_data
     }
+
+@router.get("/verify-reset-token", response_model=dict)
+def verify_reset_token_endpoint(
+    token: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Verify a password reset token is valid and not expired."""
+    user_id = verify_password_reset_token(token, db)
+    if user_id:
+        return {"valid": True, "user_id": user_id}
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid or expired password reset token"
+    )

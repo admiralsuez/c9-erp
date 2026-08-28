@@ -435,6 +435,22 @@ export const OrderDetailPage: React.FC = () => {
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
+  // Format order header with date and challan book
+  const orderDate = new Date(order.created_at);
+  const dateFormatted = `${orderDate.getDate()}-${orderDate.toLocaleString('en-US', { month: 'short' })}-${orderDate.getFullYear().toString().slice(-2)}`;
+  const vendorName = vendor?.name || `#${order.vendor_id}`;
+  const challanNumber = order.challan_book_number || 'N/A';
+  const formattedOrderHeader = `HO-${dateFormatted}-${vendorName}-${challanNumber}`;
+
+  // Generate item summary
+  const itemSummary = order.items
+    .map((item: any) => {
+      const inventoryItem = inventoryData?.items?.find((inv: any) => inv.id === item.item_id);
+      const itemName = inventoryItem?.item_name || `Item #${item.item_id}`;
+      return `${itemName} (${item.quantity_ordered})`;
+    })
+    .join(', ');
+
   return (
     <div className="space-y-6 pb-6">
       {/* Header */}
@@ -448,12 +464,11 @@ export const OrderDetailPage: React.FC = () => {
           </button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-neutral-900">{order.order_number}</h1>
+              <h1 className="text-3xl font-bold text-neutral-900">{formattedOrderHeader}</h1>
               <StatusBadge status={order.status}>{formatStatus(order.status)}</StatusBadge>
             </div>
             <p className="text-neutral-600 mt-1">
-              Vendor: {vendor?.name || `#${order.vendor_id}`} • Created by{' '}
-              {userLabel(order.created_by)} on {formatDate(order.created_at)}
+              {itemSummary} • Created by {userLabel(order.created_by)} on {formatDate(order.created_at)}
             </p>
           </div>
         </div>

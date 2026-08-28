@@ -20,6 +20,9 @@ export const VendorFormPage: React.FC = () => {
   const [formError, setFormError] = useState('');
   const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(false);
+  const [showAddType, setShowAddType] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [addingType, setAddingType] = useState(false);
   const [addresses, setAddresses] = useState<AddressEntry[]>([
     { id: '0', address: '', city: '', state: '', pincode: '', is_primary: true }
   ]);
@@ -50,6 +53,22 @@ export const VendorFormPage: React.FC = () => {
     };
     loadTypes();
   }, []);
+
+  const handleAddVendorType = async () => {
+    if (!newTypeName.trim()) return;
+    setAddingType(true);
+    try {
+      const newType = await vendorApi.types.create(newTypeName.trim());
+      setVendorTypes([...vendorTypes, newType]);
+      setFormData({ ...formData, vendor_type_id: newType.id });
+      setNewTypeName('');
+      setShowAddType(false);
+    } catch (err) {
+      console.error('Failed to add vendor type:', err);
+    } finally {
+      setAddingType(false);
+    }
+  };
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddress, setNewAddress] = useState<Omit<AddressEntry, 'id'> & { id?: string }>({
     address: '',
@@ -82,6 +101,11 @@ export const VendorFormPage: React.FC = () => {
 
     if (!formData.name || !formData.vendor_type_id) {
       setFormError('Name and Vendor Type are required');
+      return;
+    }
+
+    if (showAddType) {
+      setFormError('Please complete or cancel adding the custom vendor type first');
       return;
     }
 
@@ -144,22 +168,76 @@ export const VendorFormPage: React.FC = () => {
                 <label className={formLabel}>
                   Vendor Type *
                 </label>
-                <select
-                  value={formData.vendor_type_id || ''}
-                  onChange={(e) =>
-                    setFormData({ ...formData, vendor_type_id: e.target.value ? parseInt(e.target.value) : null })
-                  }
-                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  disabled={isPending || loadingTypes}
-                  required
-                >
-                  <option value="">Select a vendor type...</option>
-                  {vendorTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
+                {!showAddType ? (
+                  <div className="flex gap-2">
+                    <select
+                      value={formData.vendor_type_id || ''}
+                      onChange={(e) =>
+                        setFormData({ ...formData, vendor_type_id: e.target.value ? parseInt(e.target.value) : null })
+                      }
+                      className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      disabled={isPending || loadingTypes}
+                      required
+                    >
+                      <option value="">Select a vendor type...</option>
+                      {vendorTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
+                      <option value="__add_custom__" disabled style={{color: 'gray'}}>─── Add Custom Type ───</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddType(true)}
+                      className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
+                      disabled={isPending}
+                      title="Add a new vendor type"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={newTypeName}
+                      onChange={(e) => setNewTypeName(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddVendorType();
+                        }
+                      }}
+                      placeholder="Enter custom vendor type name"
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      disabled={addingType}
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAddVendorType}
+                        disabled={!newTypeName.trim() || addingType}
+                        className="flex-1 px-3 py-1.5 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                      >
+                        {addingType && <Loader className="w-3 h-3 animate-spin" />}
+                        {addingType ? 'Creating...' : 'Create Type'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddType(false);
+                          setNewTypeName('');
+                        }}
+                        disabled={addingType}
+                        className="flex-1 px-3 py-1.5 border border-neutral-300 text-neutral-700 rounded hover:bg-neutral-100 disabled:opacity-50 text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {loadingTypes && <p className="text-xs text-neutral-500 mt-1">Loading vendor types...</p>}
               </div>
             </div>

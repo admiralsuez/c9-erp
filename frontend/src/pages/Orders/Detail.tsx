@@ -446,7 +446,7 @@ export const OrderDetailPage: React.FC = () => {
   const itemSummary = order.items
     .map((item: any) => {
       const inventoryItem = inventoryData?.items?.find((inv: any) => inv.id === item.item_id);
-      const itemName = inventoryItem?.item_name || `Item #${item.item_id}`;
+      const itemName = inventoryItem?.name || `Item #${item.item_id}`;
       return `${itemName} (${item.quantity_ordered})`;
     })
     .join(', ');

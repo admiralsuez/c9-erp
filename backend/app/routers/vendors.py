@@ -18,33 +18,22 @@ def normalize_vendor_name(name: str) -> str:
 
 
 def find_similar_vendors(name: str, db: Session, exclude_id: int = None) -> List[Vendor]:
-    """Find vendors with similar names using fuzzy matching.
-    Uses DB-level filtering first to reduce the set, then fuzzy matches in Python.
+    """Find vendors with exact name match only (no fuzzy matching to avoid false 409s).
+    Only block truly identical/normalized names, not similar ones.
     """
     normalized = normalize_vendor_name(name)
-    threshold = 0.6  # 60% similarity
     
-    # First pass: DB-level filter to reduce candidates (ILIKE prefix + exact normal)
-    prefix = normalized[:3] if len(normalized) >= 3 else normalized
-    candidates = db.query(Vendor).filter(
+    # Only check for exact normalized match
+    existing = db.query(Vendor).filter(
         Vendor.deleted_at == None,
-        or_(
-            Vendor.name_normalized == normalized,
-            Vendor.name_normalized.ilike(f"{prefix}%")
-        )
+        Vendor.name_normalized == normalized
     ).all()
     
-    # Second pass: fuzzy matching on reduced set
     similar = []
-    for vendor in candidates:
+    for vendor in existing:
         if exclude_id and vendor.id == exclude_id:
             continue
-        if vendor.name_normalized == normalized:
-            similar.append(vendor)
-        else:
-            ratio = SequenceMatcher(None, normalized, vendor.name_normalized).ratio()
-            if ratio >= threshold:
-                similar.append(vendor)
+        similar.append(vendor)
     
     return similar
 

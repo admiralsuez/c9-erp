@@ -24,6 +24,7 @@ export const OrderCreatePage: React.FC = () => {
   const [vendorId, setVendorId] = useState<number | ''>('');
   const [remarks, setRemarks] = useState('');
   const [challanBookNumber, setChallanBookNumber] = useState('');
+  const [orderDate, setOrderDate] = useState<string>('');
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [customDeliveryAddress, setCustomDeliveryAddress] = useState('');
   const [items, setItems] = useState<LocalOrderItem[]>([]);
@@ -224,6 +225,7 @@ export const OrderCreatePage: React.FC = () => {
       remarks: remarks || undefined,
       delivery_address: buildDeliveryAddress(),
       challan_book_number: challanBookNumber || undefined,
+      order_date: orderDate || undefined,
     };
 
     createOrder(orderData);
@@ -607,6 +609,12 @@ export const OrderCreatePage: React.FC = () => {
             <div>
               <label className={formLabel}>Challan Book Number (Optional)</label>
               <input type="text" value={challanBookNumber} onChange={(e) => setChallanBookNumber(e.target.value)} placeholder="e.g., CB-2024-001" className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
+            </div>
+
+            <div>
+              <label className={formLabel}>Order Date (Optional - Max 30 days past)</label>
+              <input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm" max={new Date().toISOString().split('T')[0]} />
+              <p className="text-xs text-neutral-500 mt-1">Leave empty for today's date. Maximum 30 days in the past allowed.</p>
             </div>
           </div>
         </Card>

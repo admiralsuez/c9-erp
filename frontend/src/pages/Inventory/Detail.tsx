@@ -18,6 +18,7 @@ import {
   useAdjustItem,
   useUpdateStockStatus,
   useCreateChildItem,
+  useInventory,
 } from '../../hooks/useInventory';
 import { useUserNameMap } from '../../hooks/useUsers';
 
@@ -80,6 +81,19 @@ export const InventoryDetailPage: React.FC = () => {
     current_quantity: 0,
     minimum_quantity: 0,
   });
+  const [showParentMgmt, setShowParentMgmt] = useState(false);
+  const [selectedParentId, setSelectedParentId] = useState<number | null>(item?.parent_id || null);
+  const [isChangingParent, setIsChangingParent] = useState(false);
+  const [parentMgmtError, setParentMgmtError] = useState('');
+  const [allItems, setAllItems] = useState<any[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const { data: itemsData } = useInventory(1, 1000);
+  
+  React.useEffect(() => {
+    if (itemsData?.items) {
+      setAllItems(itemsData.items.filter(i => i.id !== itemId && !i.parent_id));
+    }
+  }, [itemsData, itemId]);
   const { mutate: createChild, isPending: isCreatingChild } = useCreateChildItem(itemId || 0, () => {
     setShowAddChildModal(false);
     setChildError('');
@@ -307,6 +321,56 @@ export const InventoryDetailPage: React.FC = () => {
     );
   };
 
+  const handleSetParent = async () => {
+    if (!itemId) return;
+    setIsChangingParent(true);
+    setParentMgmtError('');
+    try {
+      const response = await fetch(`/api/inventory/items/${itemId}/set-parent`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: JSON.stringify({ parent_id: selectedParentId }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'Failed to set parent');
+      }
+      setShowParentMgmt(false);
+      refetch();
+    } catch (err: any) {
+      setParentMgmtError(err.message || 'Failed to set parent');
+    } finally {
+      setIsChangingParent(false);
+    }
+  };
+
+  const handlePromoteToParent = async () => {
+    if (!itemId) return;
+    setIsChangingParent(true);
+    setParentMgmtError('');
+    try {
+      const response = await fetch(`/api/inventory/items/${itemId}/promote-to-parent`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'Failed to promote to parent');
+      }
+      setShowParentMgmt(false);
+      refetch();
+    } catch (err: any) {
+      setParentMgmtError(err.message || 'Failed to promote to parent');
+    } finally {
+      setIsChangingParent(false);
+    }
+  };
+
   if (isLoading) return <ListLoadingState message="Loading item..." />;
 
   if (error || !item) {
@@ -440,6 +504,160 @@ export const InventoryDetailPage: React.FC = () => {
               {isDeleting && <Loader className="w-4 h-4 animate-spin" />}
               {isDeleting ? 'Deleting...' : 'Delete'}
             </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Parent/Child Relationship Management */}
+      {!isEditMode && (
+        <Card padding="lg">
+          <h2 className="text-lg font-semibold text-neutral-900 mb-4">Item Relationship</h2>
+          <div className="space-y-4">
+            {item.parent_id ? (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-900 mb-2">
+                  <strong>Current Status:</strong> This is a child item of another product
+                </p>
+                <p className="text-xs text-blue-800 mb-3">Parent Item ID: {item.parent_id}</p>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => {
+                      setShowParentMgmt(true);
+                      setParentMgmtError('');
+                    }}
+                    className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Change Parent or Promote
+                  </Button>
+                </div>
+              </div>
+            ) : item.children && item.children.length > 0 ? (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-900 mb-2">
+                  <strong>Current Status:</strong> This is a parent item with {item.children.length} variant(s)
+                </p>
+                <p className="text-xs text-green-800">Parent items cannot be children of other items</p>
+              </div>
+            ) : (
+              <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg">
+                <p className="text-sm text-neutral-900 mb-3">
+                  <strong>Current Status:</strong> This is a standalone item (not a parent or child)
+                </p>
+                <Button
+                  onClick={() => {
+                    setShowParentMgmt(true);
+                    setParentMgmtError('');
+                  }}
+                  className="text-sm px-3 py-1.5 bg-neutral-600 text-white rounded hover:bg-neutral-700"
+                >
+                  Make This a Child of Another Item
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* Parent/Child Management Modal */}
+      {showParentMgmt && (
+        <Card className="border border-blue-200 bg-blue-50" padding="lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-neutral-900">Manage Item Relationship</h3>
+            <button
+              onClick={() => setShowParentMgmt(false)}
+              className="p-1 hover:bg-neutral-200 rounded"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {parentMgmtError && (
+            <div className="p-3 bg-error/10 border border-error rounded-lg mb-4">
+              <p className="text-sm text-error">{parentMgmtError}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {item.parent_id ? (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-900 mb-2">Select New Parent or Promote</label>
+                  <select
+                    value={selectedParentId || ''}
+                    onChange={(e) => setSelectedParentId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isChangingParent}
+                  >
+                    <option value="">-- Promote to standalone (remove parent) --</option>
+                    {allItems.map((parent) => (
+                      <option key={parent.id} value={parent.id}>
+                        {parent.name} (SKU: {parent.sku})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    onClick={() => setShowParentMgmt(false)}
+                    disabled={isChangingParent}
+                    className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded hover:bg-neutral-100"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (selectedParentId === null) {
+                        handlePromoteToParent();
+                      } else {
+                        handleSetParent();
+                      }
+                    }}
+                    disabled={isChangingParent}
+                    className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isChangingParent && <Loader className="w-4 h-4 animate-spin" />}
+                    {isChangingParent ? 'Updating...' : selectedParentId === null ? 'Promote to Parent' : 'Set Parent'}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-900 mb-2">Select a Parent Item</label>
+                  <select
+                    value={selectedParentId || ''}
+                    onChange={(e) => setSelectedParentId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={isChangingParent}
+                  >
+                    <option value="">-- Select a parent item --</option>
+                    {allItems.map((parent) => (
+                      <option key={parent.id} value={parent.id}>
+                        {parent.name} (SKU: {parent.sku})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-neutral-600 mt-1">Only standalone items can be parents</p>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    onClick={() => setShowParentMgmt(false)}
+                    disabled={isChangingParent}
+                    className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded hover:bg-neutral-100"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSetParent}
+                    disabled={isChangingParent || !selectedParentId}
+                    className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isChangingParent && <Loader className="w-4 h-4 animate-spin" />}
+                    {isChangingParent ? 'Updating...' : 'Set as Child'}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </Card>
       )}

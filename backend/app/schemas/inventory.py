@@ -24,6 +24,7 @@ class InventoryCategoryResponse(InventoryCategoryBase):
 class InventoryItemBase(BaseModel):
     name: str
     sku: str
+    erp_number: Optional[str] = None
     barcode: Optional[str] = None
     category_id: Optional[int] = None
     item_type: str = "consumable"

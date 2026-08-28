@@ -202,6 +202,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
           parent: {
             name: data.name,
             sku: data.sku,
+            erp_number: data.erp_number || undefined,
             barcode: data.barcode || undefined,
             category_id: data.category_id || undefined,
             item_type: data.item_type,
@@ -235,6 +236,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
       const itemData: InventoryItemCreateRequest = {
         name: data.name,
         sku: data.sku,
+        erp_number: data.erp_number || undefined,
         barcode: data.barcode || undefined,
         category_id: data.category_id || undefined,
         item_type: data.item_type,
@@ -312,7 +314,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Input
                   {...register('sku', {
@@ -330,6 +332,15 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
                       input.value = input.value.replace(/ +/g, '-');
                     }
                   }}
+                />
+              </div>
+              <div>
+                <Input
+                  {...register('erp_number')}
+                  label="ERP Number (Optional)"
+                  placeholder="e.g., ERP-001"
+                  error={errors.erp_number?.message as string}
+                  disabled={isPending}
                 />
               </div>
               <div>

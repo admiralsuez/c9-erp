@@ -12,6 +12,7 @@ export interface InventoryItemResponse {
   id: number;
   name: string;
   sku: string;
+  erp_number?: string;
   barcode?: string;
   category_id?: number;
   item_type: string;
@@ -35,6 +36,7 @@ export interface InventoryItemResponse {
 export interface InventoryItemChildRequest {
   name: string;
   sku: string;
+  erp_number?: string;
   barcode?: string;
   item_type?: string;
   current_quantity?: number;
@@ -53,6 +55,7 @@ export interface InventoryItemBatchCreateRequest {
 export interface InventoryItemCreateRequest {
   name: string;
   sku: string;
+  erp_number?: string;
   barcode?: string;
   category_id?: number;
   item_type: string;

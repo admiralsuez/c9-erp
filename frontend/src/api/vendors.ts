@@ -8,10 +8,16 @@ export interface PaginatedResponse<T> {
   pages: number;
 }
 
+export interface VendorType {
+  id: number;
+  name: string;
+}
+
 export interface VendorResponse {
   id: number;
   name: string;
   vendor_type: string;
+  vendor_type_id?: number | null;
   contact_person: string;
   phone: string;
   email: string;
@@ -30,7 +36,8 @@ export interface VendorResponse {
 
 export interface VendorCreateRequest {
   name: string;
-  vendor_type: string;
+  vendor_type?: string;
+  vendor_type_id?: number | null;
   contact_person?: string;
   phone?: string;
   email?: string;
@@ -85,4 +92,16 @@ export const vendorApi = {
   delete: async (vendorId: number): Promise<void> => {
     await apiClient.delete(`/vendors/${vendorId}`);
   },
+
+  types: {
+    list: async (): Promise<VendorType[]> => {
+      const response = await apiClient.get<VendorType[]>('/vendors/types');
+      return response.data;
+    },
+
+    create: async (name: string): Promise<VendorType> => {
+      const response = await apiClient.post<VendorType>('/vendors/types', { name });
+      return response.data;
+    }
+  }
 };

@@ -20,6 +20,7 @@ class InventoryItem(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     sku = Column(String(100), unique=True, nullable=False)
+    erp_number = Column(String(100), unique=True, nullable=True)
     barcode = Column(String(100), unique=True, nullable=True)
     qr_code_data = Column(String(255))
     category_id = Column(Integer, ForeignKey("inventory_categories.id"))

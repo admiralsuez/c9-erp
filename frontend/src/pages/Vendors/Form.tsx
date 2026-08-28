@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button } from '../../components/ui';
 import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { ArrowLeft, Loader, AlertCircle, Plus, Trash2, MapPin } from 'lucide-react';
 import { useCreateVendor } from '../../hooks/useVendors';
-import { vendorApi, type VendorCreateRequest } from '../../api/vendors';
+import { vendorApi, type VendorCreateRequest, type VendorType } from '../../api/vendors';
 
 interface AddressEntry {
   id: string;
@@ -18,12 +18,14 @@ interface AddressEntry {
 export const VendorFormPage: React.FC = () => {
   const navigate = useNavigate();
   const [formError, setFormError] = useState('');
+  const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
+  const [loadingTypes, setLoadingTypes] = useState(false);
   const [addresses, setAddresses] = useState<AddressEntry[]>([
     { id: '0', address: '', city: '', state: '', pincode: '', is_primary: true }
   ]);
   const [formData, setFormData] = useState<VendorCreateRequest>({
     name: '',
-    vendor_type: '',
+    vendor_type_id: null,
     contact_person: '',
     phone: '',
     email: '',
@@ -33,6 +35,21 @@ export const VendorFormPage: React.FC = () => {
     gst: '',
     notes: '',
   });
+
+  // Load vendor types on mount
+  useEffect(() => {
+    const loadTypes = async () => {
+      setLoadingTypes(true);
+      try {
+        const types = await vendorApi.types.list();
+        setVendorTypes(types);
+      } catch (err) {
+        console.error('Failed to load vendor types:', err);
+      }
+      setLoadingTypes(false);
+    };
+    loadTypes();
+  }, []);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddress, setNewAddress] = useState<Omit<AddressEntry, 'id'> & { id?: string }>({
     address: '',
@@ -63,7 +80,7 @@ export const VendorFormPage: React.FC = () => {
     e.preventDefault();
     setFormError('');
 
-    if (!formData.name || !formData.vendor_type) {
+    if (!formData.name || !formData.vendor_type_id) {
       setFormError('Name and Vendor Type are required');
       return;
     }
@@ -127,17 +144,23 @@ export const VendorFormPage: React.FC = () => {
                 <label className={formLabel}>
                   Vendor Type *
                 </label>
-                <input
-                  type="text"
-                  value={formData.vendor_type}
+                <select
+                  value={formData.vendor_type_id || ''}
                   onChange={(e) =>
-                    setFormData({ ...formData, vendor_type: e.target.value })
+                    setFormData({ ...formData, vendor_type_id: e.target.value ? parseInt(e.target.value) : null })
                   }
-                  placeholder="e.g., Supplier, Wholesale, Distributor"
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  disabled={isPending}
+                  disabled={isPending || loadingTypes}
                   required
-                />
+                >
+                  <option value="">Select a vendor type...</option>
+                  {vendorTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name}
+                    </option>
+                  ))}
+                </select>
+                {loadingTypes && <p className="text-xs text-neutral-500 mt-1">Loading vendor types...</p>}
               </div>
             </div>
           </div>

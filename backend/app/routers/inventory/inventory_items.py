@@ -2,9 +2,10 @@ import logging
 import os
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, status, UploadFile
+from pydantic import BaseModel
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, selectinload
 
@@ -128,11 +129,13 @@ def list_items(
     """List inventory items with filtering and search. Returns paginated response."""
     query = db.query(InventoryItem).filter(InventoryItem.deleted_at == None)
     
-    # Search by name, ERP Code, or barcode
+    # Search by name, ERP number, SKU, or barcode
     if search:
         query = query.filter(
             or_(
                 InventoryItem.name.ilike(f"%{search}%"),
+                InventoryItem.sku.ilike(f"%{search}%"),
+                InventoryItem.erp_number.ilike(f"%{search}%"),
                 InventoryItem.barcode.ilike(f"%{search}%")
             )
         )
@@ -313,6 +316,18 @@ def create_item(
                 detail="Item with this SKU already exists"
             )
         
+        # Check if erp_number already exists (if provided)
+        if item_data.erp_number:
+            existing_erp = db.query(InventoryItem).filter(
+                InventoryItem.erp_number == item_data.erp_number
+            ).first()
+            
+            if existing_erp:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Item with this ERP number already exists"
+                )
+        
         # Check if barcode already exists (if provided)
         if item_data.barcode:
             existing_barcode = db.query(InventoryItem).filter(
@@ -379,6 +394,7 @@ def create_item(
         item = InventoryItem(
             name=item_data.name,
             sku=item_data.sku,
+            erp_number=item_data.erp_number,
             barcode=item_data.barcode,
             qr_code_data=item_data.barcode,  # Use barcode as QR data for now
             category_id=item_data.category_id,
@@ -884,3 +900,142 @@ def upload_item_photo(
     db.commit()
     db.refresh(image_record)
     return image_record
+
+
+# ============ ITEM PARENT/CHILD REASSIGNMENT ============
+class ItemRelationshipChangeRequest(BaseModel):
+    parent_id: Optional[int] = None
+
+
+@router.patch("/items/{item_id}/set-parent", response_model=InventoryItemResponse)
+def set_item_parent(
+    item_id: int,
+    req: ItemRelationshipChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.edit"))
+):
+    """Make an existing item a child of another item.
+    
+    Validates:
+    - Item exists and is not deleted
+    - New parent exists and is not deleted (if provided)
+    - New parent is not itself a child (one level only)
+    - No circular relationships
+    """
+    item = db.query(InventoryItem).filter(
+        InventoryItem.id == item_id,
+        InventoryItem.deleted_at == None
+    ).first()
+    
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found"
+        )
+    
+    # If removing parent (promoting to standalone)
+    if req.parent_id is None:
+        if item.parent_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Item is already a standalone item (no parent)"
+            )
+        item.parent_id = None
+        db.commit()
+        db.refresh(item)
+        return item
+    
+    # If setting a new parent
+    new_parent = db.query(InventoryItem).filter(
+        InventoryItem.id == req.parent_id,
+        InventoryItem.deleted_at == None
+    ).first()
+    
+    if not new_parent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="New parent item not found"
+        )
+    
+    # Prevent circular relationships (parent cannot be a child of this item)
+    if new_parent.parent_id == item_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Circular relationship: cannot set parent as child of this item"
+        )
+    
+    # Prevent multi-level nesting (parent cannot be a variant itself)
+    if new_parent.parent_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selected parent is itself a variant — cannot nest further (one level only)"
+        )
+    
+    # Check if item is currently a parent (has children)
+    has_children = db.query(InventoryItem).filter(
+        InventoryItem.parent_id == item_id,
+        InventoryItem.deleted_at == None
+    ).count() > 0
+    
+    if has_children:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot make this item a child: it currently has child variants"
+        )
+    
+    # Update parent and mark new parent as container
+    item.parent_id = req.parent_id
+    new_parent.is_container = True
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.patch("/items/{item_id}/promote-to-parent", response_model=InventoryItemResponse)
+def promote_item_to_parent(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.edit"))
+):
+    """Promote a child item to a standalone parent item.
+    
+    Validates:
+    - Item exists and is not deleted
+    - Item is currently a child (has parent_id set)
+    - Item has no existing children
+    """
+    item = db.query(InventoryItem).filter(
+        InventoryItem.id == item_id,
+        InventoryItem.deleted_at == None
+    ).first()
+    
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found"
+        )
+    
+    if item.parent_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Item is already a standalone parent (no parent_id)"
+        )
+    
+    # Check if item has children (shouldn't happen if properly structured, but validate anyway)
+    has_children = db.query(InventoryItem).filter(
+        InventoryItem.parent_id == item_id,
+        InventoryItem.deleted_at == None
+    ).count() > 0
+    
+    if has_children:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot promote: this item already has child variants"
+        )
+    
+    # Promote to parent
+    item.parent_id = None
+    item.is_container = True  # Mark as container since it's now independent
+    db.commit()
+    db.refresh(item)
+    return item

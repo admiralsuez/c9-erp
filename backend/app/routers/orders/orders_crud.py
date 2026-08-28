@@ -87,19 +87,35 @@ def create_order(
     order_created_at = datetime.now(timezone.utc)
     if order_data.order_date:
         from datetime import timedelta
-        backdate = order_data.order_date
-        # Validate backdate is not more than 30 days in the past
-        if backdate > order_created_at:
+        try:
+            # If order_date is a string (ISO format from frontend), parse it
+            if isinstance(order_data.order_date, str):
+                backdate = datetime.fromisoformat(order_data.order_date.replace('Z', '+00:00'))
+            else:
+                backdate = order_data.order_date
+            
+            # Ensure we're comparing UTC datetimes
+            if backdate.tzinfo is None:
+                backdate = backdate.replace(tzinfo=timezone.utc)
+            
+            # Validate backdate is not in the future
+            if backdate > order_created_at:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Order date cannot be in the future"
+                )
+            # Validate backdate is not more than 30 days in the past
+            if order_created_at - backdate > timedelta(days=30):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Order date cannot be more than 30 days in the past"
+                )
+            order_created_at = backdate
+        except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Order date cannot be in the future"
+                detail=f"Invalid order date format: {str(e)}. Expected ISO format (YYYY-MM-DD)"
             )
-        if order_created_at - backdate > timedelta(days=30):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Order date cannot be more than 30 days in the past"
-            )
-        order_created_at = backdate
     
     max_retries = 3
     for attempt in range(max_retries):

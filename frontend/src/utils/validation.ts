@@ -17,6 +17,7 @@ export type LoginFormData = z.infer<typeof loginSchema>;
 export const createItemSchema = z.object({
   name: z.string().min(1, 'Item name is required').min(3, 'Name must be at least 3 characters'),
   sku: z.string().min(1, 'SKU is required'),
+  erp_number: z.string().optional(),
   barcode: z.string().optional(),
   category_id: z.number().optional(),
   item_type: z.enum(['consumable', 'returnable']),

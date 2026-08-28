@@ -86,7 +86,6 @@ export const InventoryDetailPage: React.FC = () => {
   const [isChangingParent, setIsChangingParent] = useState(false);
   const [parentMgmtError, setParentMgmtError] = useState('');
   const [allItems, setAllItems] = useState<any[]>([]);
-  const [loadingItems, setLoadingItems] = useState(false);
   const { data: itemsData } = useInventory(1, 1000);
   
   React.useEffect(() => {

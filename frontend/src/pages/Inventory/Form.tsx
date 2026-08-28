@@ -72,6 +72,7 @@ export const InventoryFormPage: React.FC<InventoryFormProps> = ({ isEdit = false
     defaultValues: {
       name: '',
       sku: '',
+      erp_number: '',
       barcode: '',
       category_id: 0,
       item_type: 'consumable',

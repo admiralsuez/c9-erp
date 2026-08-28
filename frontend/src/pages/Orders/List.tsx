@@ -243,6 +243,15 @@ export const OrdersListPage: React.FC = () => {
             const challanNumber = order.challan_book_number ? `-${order.challan_book_number}` : '';
             const formattedOrderHeader = `HO-${dateFormatted}-${vendorName}${challanNumber}`;
             
+            // Generate item summary from order items
+            const itemSummary = order.items
+              .map((item: any) => {
+                const qty = item.quantity_ordered || 0;
+                return `Item #${item.item_id} (${qty})`;
+              })
+              .join(', ')
+              .substring(0, 60) + (order.items && order.items.length > 0 && order.items.map((i: any) => `Item #${i.item_id} (${i.quantity_ordered || 0})`).join(', ').length > 60 ? '...' : '');
+            
             return (
             <Card
               key={order.id}
@@ -256,7 +265,7 @@ export const OrdersListPage: React.FC = () => {
                     <div>
                       <h3 className="font-semibold text-neutral-900">{formattedOrderHeader}</h3>
                       <p className="text-sm text-neutral-500 mt-1">
-                        {order.vendor?.name || 'Unknown Vendor'}
+                        {itemSummary || 'No items'}
                       </p>
                     </div>
                   </div>

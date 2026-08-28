@@ -235,7 +235,15 @@ export const OrdersListPage: React.FC = () => {
         <ListEmptyState message="No orders found" />
       ) : (
         <div className="space-y-3">
-          {items.map((order) => (
+          {items.map((order) => {
+            // Format order header with date and challan book (matching detail page format)
+            const orderDate = new Date(order.created_at);
+            const dateFormatted = `${orderDate.getDate()}-${orderDate.toLocaleString('en-US', { month: 'short' })}-${orderDate.getFullYear().toString().slice(-2)}`;
+            const vendorName = order.vendor?.name || `#${order.vendor_id}`;
+            const challanNumber = order.challan_book_number ? `-${order.challan_book_number}` : '';
+            const formattedOrderHeader = `HO-${dateFormatted}-${vendorName}${challanNumber}`;
+            
+            return (
             <Card
               key={order.id}
               padding="lg"
@@ -246,7 +254,7 @@ export const OrdersListPage: React.FC = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-4">
                     <div>
-                      <h3 className="font-semibold text-neutral-900">{order.order_number}</h3>
+                      <h3 className="font-semibold text-neutral-900">{formattedOrderHeader}</h3>
                       <p className="text-sm text-neutral-500 mt-1">
                         {order.vendor?.name || 'Unknown Vendor'}
                       </p>
@@ -266,7 +274,8 @@ export const OrdersListPage: React.FC = () => {
                 </div>
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 

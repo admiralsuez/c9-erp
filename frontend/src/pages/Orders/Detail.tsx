@@ -439,8 +439,8 @@ export const OrderDetailPage: React.FC = () => {
   const orderDate = new Date(order.created_at);
   const dateFormatted = `${orderDate.getDate()}-${orderDate.toLocaleString('en-US', { month: 'short' })}-${orderDate.getFullYear().toString().slice(-2)}`;
   const vendorName = vendor?.name || `#${order.vendor_id}`;
-  const challanNumber = order.challan_book_number || 'N/A';
-  const formattedOrderHeader = `HO-${dateFormatted}-${vendorName}-${challanNumber}`;
+  const challanNumber = order.challan_book_number ? `-${order.challan_book_number}` : '';
+  const formattedOrderHeader = `HO-${dateFormatted}-${vendorName}${challanNumber}`;
 
   // Generate item summary
   const itemSummary = order.items

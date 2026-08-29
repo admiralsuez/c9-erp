@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.core.database import get_db
-from app.core.auth import get_current_user, require_admin
+from app.core.auth import get_current_user, require_admin, require_permission
 from app.models import User, Vendor, VendorType
 from app.schemas import VendorCreate, VendorUpdate, VendorResponse, VendorSummaryResponse, VendorTypeResponse, VendorTypeCreate
 from app.schemas.imports import VendorImportRow, ImportResult, ImportError, get_vendor_template

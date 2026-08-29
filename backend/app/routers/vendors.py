@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_admin
 from app.models import User, Vendor, VendorType
 from app.schemas import VendorCreate, VendorUpdate, VendorResponse, VendorSummaryResponse, VendorTypeResponse, VendorTypeCreate
+from app.schemas.imports import VendorImportRow, ImportResult, ImportError, get_vendor_template
+from app.services.csv_importer import parse_csv_file, validate_and_parse_rows, validate_headers, get_required_headers
 from typing import List
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
@@ -315,3 +317,118 @@ def delete_vendor_type(type_id: int, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Cannot delete: {vendors_using} vendor(s) use this type")
     db.delete(vt)
     db.commit()
+
+
+# ============ BULK IMPORT ============
+@router.get("/import/template")
+def get_vendor_import_template():
+    """Get CSV template for vendor import"""
+    return get_vendor_template()
+
+
+@router.post("/import", response_model=ImportResult)
+def import_vendors(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bulk import vendors from CSV file.
+    
+    CSV must have columns: name, vendor_type_id, contact_person, phone, email, address, city, state, gst
+    
+    Returns detailed import results with errors by row number.
+    """
+    try:
+        # Read file
+        contents = file.file.read()
+        if not contents:
+            raise ValueError('File is empty')
+        
+        # Parse CSV
+        headers, rows = parse_csv_file(contents)
+        
+        # Validate headers
+        required_headers = ['name']
+        is_valid, error_msg = validate_headers(headers, required_headers)
+        if not is_valid:
+            raise ValueError(error_msg)
+        
+        # Validate and parse rows
+        valid_rows, validation_errors = validate_and_parse_rows(rows, VendorImportRow)
+        
+        # Check for duplicates and FK issues
+        all_errors = list(validation_errors)
+        created_count = 0
+        
+        # Create valid vendors in a transaction
+        try:
+            for vendor_data in valid_rows:
+                normalized_name = normalize_vendor_name(vendor_data.name)
+                
+                # Check for existing vendor with same normalized name
+                existing = db.query(Vendor).filter(
+                    Vendor.name_normalized == normalized_name,
+                    Vendor.deleted_at == None
+                ).first()
+                
+                if existing:
+                    all_errors.append(ImportError(
+                        row_number=len(all_errors) + 2,
+                        reason=f"Duplicate vendor name: '{vendor_data.name}'",
+                        values=vendor_data.model_dump()
+                    ))
+                    continue
+                
+                # Check vendor_type_id if provided
+                if vendor_data.vendor_type_id:
+                    vtype = db.query(VendorType).filter(VendorType.id == vendor_data.vendor_type_id).first()
+                    if not vtype:
+                        all_errors.append(ImportError(
+                            row_number=len(all_errors) + 2,
+                            reason=f"Vendor type ID {vendor_data.vendor_type_id} not found",
+                            values=vendor_data.model_dump()
+                        ))
+                        continue
+                
+                # Create vendor
+                vendor = Vendor(
+                    name=vendor_data.name,
+                    name_normalized=normalized_name,
+                    vendor_type_id=vendor_data.vendor_type_id,
+                    contact_person=vendor_data.contact_person,
+                    phone=vendor_data.phone,
+                    email=vendor_data.email,
+                    address=vendor_data.address,
+                    city=vendor_data.city,
+                    state=vendor_data.state,
+                    pincode=vendor_data.pincode,
+                    gst=vendor_data.gst,
+                    notes=vendor_data.notes,
+                )
+                db.add(vendor)
+                created_count += 1
+            
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise ValueError(f"Database error: {str(e)}")
+        
+        return ImportResult(
+            success=len(all_errors) == 0,
+            total_rows=len(rows),
+            successful=created_count,
+            failed=len(all_errors),
+            errors=all_errors,
+            message=f"Imported {created_count} vendors successfully. {len(all_errors)} rows had errors."
+        )
+    
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Import failed: {str(e)}"
+        )

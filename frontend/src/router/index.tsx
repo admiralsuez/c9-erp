@@ -19,6 +19,7 @@ import { NotificationsPage } from '../pages/Notifications/Index';
 import { ApprovalsPage } from '../pages/Approvals/Index';
 import { ReportsPage } from '../pages/Reports';
 import { WeeklyReportPage } from '../pages/Reports/Weekly';
+import { ImportsPage } from '../pages/Imports/Index';
 import { NotFoundPage } from '../pages/Stubs';
 import ForgotPassword from '../pages/Auth/ForgotPassword';
 import PasswordReset from '../pages/Auth/PasswordReset';
@@ -204,6 +205,17 @@ export const AppRouter: React.FC = () => {
             <ProtectedRoute>
               <AppShell>
                 <WeeklyReportPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/imports"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <ImportsPage />
               </AppShell>
             </ProtectedRoute>
           }

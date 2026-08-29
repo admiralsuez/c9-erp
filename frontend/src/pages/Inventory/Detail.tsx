@@ -4,6 +4,7 @@ import { Card, Button, ListLoadingState, StatusBadge } from '../../components/ui
 import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { EntityListCard } from '../../components/common/EntityListCard';
 import { formatDate, formatDateTime } from '../../utils/format';
+import { ErrorAlert } from '../../components/ErrorAlert';
 import { ArrowLeft, Edit2, Trash2, Plus, AlertCircle, SlidersHorizontal, Loader, Barcode, Info, X } from 'lucide-react';
 import { SerialNumberInput } from '../../components/inventory/SerialNumberInput';
 import { SerialNumberImport } from '../../components/inventory/SerialNumberImport';
@@ -571,9 +572,10 @@ export const InventoryDetailPage: React.FC = () => {
           </div>
 
           {parentMgmtError && (
-            <div className="p-3 bg-error/10 border border-error rounded-lg mb-4">
-              <p className="text-sm text-error">{parentMgmtError}</p>
-            </div>
+            <ErrorAlert
+              error={{ response: { status: 400, data: { detail: parentMgmtError } } }}
+              onDismiss={() => setParentMgmtError('')}
+            />
           )}
 
           <div className="space-y-4">
@@ -623,20 +625,37 @@ export const InventoryDetailPage: React.FC = () => {
               <>
                 <div>
                   <label className="block text-sm font-medium text-neutral-900 mb-2">Select a Parent Item</label>
-                  <select
-                    value={selectedParentId || ''}
-                    onChange={(e) => setSelectedParentId(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    disabled={isChangingParent}
-                  >
-                    <option value="">-- Select a parent item --</option>
-                    {allItems.map((parent) => (
-                      <option key={parent.id} value={parent.id}>
-                        {parent.name} (SKU: {parent.sku})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-neutral-600 mt-1">Only standalone items can be parents</p>
+                  {allItems.filter((p) => p.id !== item.id && !p.parent_id).length === 0 ? (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-900 font-medium">No parent items available</p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        To create variants, you need at least one base item (an item without a parent). Create a new item first, or promote another item to be a parent.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={selectedParentId || ''}
+                        onChange={(e) => setSelectedParentId(e.target.value ? Number(e.target.value) : null)}
+                        className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        disabled={isChangingParent}
+                      >
+                        <option value="">-- Select a parent item --</option>
+                        {allItems
+                          .filter((parent) => {
+                            return parent.id !== item.id && !parent.parent_id;
+                          })
+                          .map((parent) => (
+                            <option key={parent.id} value={parent.id}>
+                              {parent.name} (SKU: {parent.sku})
+                            </option>
+                          ))}
+                      </select>
+                      <p className="text-xs text-neutral-600 mt-2">
+                        ι️ Only base items (without a parent) can be parents. This allows you to organize items as product variants.
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button

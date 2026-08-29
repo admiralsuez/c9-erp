@@ -43,6 +43,8 @@ import { useUserNameMap } from '../../hooks/useUsers';
 import { useAuth } from '../../hooks/useAuth';
 import { useSignature, useUploadDocument, useOrderDocuments, useDownloadDocument, useApprovers } from '../../hooks/useSettings';
 import { formatDate, formatDateTime } from '../../utils/format';
+import { ErrorBanner } from '../../components/ErrorAlert';
+import { getErrorDetails } from '../../utils/errorMessages';
 
 const STATUS_FLOW = [
   'draft',
@@ -417,14 +419,9 @@ export const OrderDetailPage: React.FC = () => {
         >
           <ArrowLeft className="w-5 h-5 text-neutral-600" />
         </button>
-        <Card className={cardErrorPadded} padding="lg">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
-            <p className="text-error">
-              {error instanceof Error ? error.message : 'Order not found'}
-            </p>
-          </div>
-        </Card>
+        <ErrorBanner
+          error={error || { response: { status: 404, data: { detail: 'Order not found' } } }}
+        />
       </div>
     );
   }
@@ -715,12 +712,10 @@ export const OrderDetailPage: React.FC = () => {
 
       {/* Error Banner */}
       {actionError && (
-        <Card className={cardError} padding="lg">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
-            <p className="text-error">{actionError}</p>
-          </div>
-        </Card>
+        <ErrorBanner
+          error={{ response: { status: 400, data: { detail: actionError } } }}
+          onDismiss={() => setActionError('')}
+        />
       )}
 
       {/* Cancel Confirmation */}

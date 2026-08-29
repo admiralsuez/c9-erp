@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy import desc, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -11,8 +11,10 @@ from app.core.auth import get_current_user, require_permission
 from app.core.database import get_db
 from app.models import InventoryItem, Order, OrderItem, SerialNumber, User, Vendor
 from app.schemas import InventoryItemResponse, OrderCreateRequest, OrderResponse, OrderUpdateRequest
+from app.schemas.imports import OrderImportRow, ImportResult, ImportError, get_order_template
 from app.services.serial_number_service import serial_number_service
 from app.services.query_optimizer import optimize_order_query
+from app.services.csv_importer import parse_csv_file, validate_and_parse_rows, validate_headers
 
 from .orders_common import OrderStatus, add_timeline_entry, generate_order_number, reserve_stock
 
@@ -418,3 +420,171 @@ def update_order(
     db.commit()
     db.refresh(order)
     return order
+
+
+# ============ BULK IMPORT ============
+@router.get("/import/template")
+def get_order_import_template():
+    """Get CSV template for order import"""
+    return get_order_template()
+
+
+@router.post("/import", response_model=ImportResult)
+def import_orders(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("orders.create"))
+):
+    """Bulk import orders from CSV file.
+    
+    CSV must have columns: vendor_id, item_id, quantity_ordered
+    Optional: order_date, remarks, delivery_address, challan_book_number
+    
+    Returns detailed import results with errors by row number.
+    """
+    try:
+        # Read file
+        contents = file.file.read()
+        if not contents:
+            raise ValueError('File is empty')
+        
+        # Parse CSV
+        headers, rows = parse_csv_file(contents)
+        
+        # Validate headers
+        required_headers = ['vendor_id', 'item_id', 'quantity_ordered']
+        is_valid, error_msg = validate_headers(headers, required_headers)
+        if not is_valid:
+            raise ValueError(error_msg)
+        
+        # Validate and parse rows
+        valid_rows, validation_errors = validate_and_parse_rows(rows, OrderImportRow)
+        
+        # Check for FK issues and create orders
+        all_errors = list(validation_errors)
+        created_count = 0
+        
+        try:
+            for order_data in valid_rows:
+                # Validate vendor exists
+                vendor = db.query(Vendor).filter(
+                    Vendor.id == order_data.vendor_id,
+                    Vendor.deleted_at == None
+                ).first()
+                
+                if not vendor:
+                    all_errors.append(ImportError(
+                        row_number=len(all_errors) + 2,
+                        reason=f"Vendor ID {order_data.vendor_id} not found",
+                        values=order_data.model_dump()
+                    ))
+                    continue
+                
+                # Validate item exists
+                item = db.query(InventoryItem).filter(
+                    InventoryItem.id == order_data.item_id,
+                    InventoryItem.deleted_at == None
+                ).first()
+                
+                if not item:
+                    all_errors.append(ImportError(
+                        row_number=len(all_errors) + 2,
+                        reason=f"Item ID {order_data.item_id} not found",
+                        values=order_data.model_dump()
+                    ))
+                    continue
+                
+                # Validate item is not a parent (cannot order parent items directly)
+                item_children = db.query(InventoryItem).filter(
+                    InventoryItem.parent_id == item.id,
+                    InventoryItem.deleted_at == None
+                ).count()
+                
+                if item_children > 0:
+                    all_errors.append(ImportError(
+                        row_number=len(all_errors) + 2,
+                        reason=f"Item '{item.name}' is a parent product. Select a variant instead.",
+                        values=order_data.model_dump()
+                    ))
+                    continue
+                
+                # Parse order date if provided
+                order_created_at = datetime.now(timezone.utc)
+                if order_data.order_date:
+                    try:
+                        order_date = datetime.fromisoformat(order_data.order_date.replace('Z', '+00:00'))
+                        if order_date.tzinfo is None:
+                            order_date = order_date.replace(tzinfo=timezone.utc)
+                        order_created_at = order_date
+                    except (ValueError, AttributeError):
+                        all_errors.append(ImportError(
+                            row_number=len(all_errors) + 2,
+                            reason=f"Invalid order date format: {order_data.order_date}. Expected YYYY-MM-DD",
+                            values=order_data.model_dump()
+                        ))
+                        continue
+                
+                # Create order
+                try:
+                    order_number = generate_order_number(db, "ORD-{YYYY}-{SEQ}", current_user.location or "HO", 0, order_created_at)
+                    
+                    order = Order(
+                        order_number=order_number,
+                        vendor_id=order_data.vendor_id,
+                        status=OrderStatus.DRAFT,
+                        remarks=order_data.remarks,
+                        delivery_address=order_data.delivery_address,
+                        challan_book_number=order_data.challan_book_number,
+                        created_by=current_user.id,
+                        created_at=order_created_at
+                    )
+                    db.add(order)
+                    db.flush()
+                    
+                    # Add order item
+                    order_item = OrderItem(
+                        order_id=order.id,
+                        item_id=order_data.item_id,
+                        quantity_ordered=Decimal(str(order_data.quantity_ordered))
+                    )
+                    db.add(order_item)
+                    
+                    # Add timeline entry
+                    add_timeline_entry(db, order, "created", current_user)
+                    
+                    # Reserve stock
+                    reserve_stock(db, order, current_user)
+                    
+                    created_count += 1
+                except Exception as e:
+                    all_errors.append(ImportError(
+                        row_number=len(all_errors) + 2,
+                        reason=f"Failed to create order: {str(e)}",
+                        values=order_data.model_dump()
+                    ))
+                    continue
+            
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise ValueError(f"Database error: {str(e)}")
+        
+        return ImportResult(
+            success=len(all_errors) == 0,
+            total_rows=len(rows),
+            successful=created_count,
+            failed=len(all_errors),
+            errors=all_errors,
+            message=f"Imported {created_count} orders successfully. {len(all_errors)} rows had errors."
+        )
+    
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Import failed: {str(e)}"
+        )

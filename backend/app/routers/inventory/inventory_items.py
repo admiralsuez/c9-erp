@@ -32,6 +32,8 @@ from app.schemas import (
 )
 from app.services.audit_service import log_audit
 from app.services.query_optimizer import optimize_inventory_item_query, optimize_inventory_category_query
+from app.schemas.imports import ItemImportRow, ImportResult, ImportError, get_item_template
+from app.services.csv_importer import parse_csv_file, validate_and_parse_rows, validate_headers, get_required_headers
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 logger = logging.getLogger(__name__)
@@ -1039,3 +1041,131 @@ def promote_item_to_parent(
     db.commit()
     db.refresh(item)
     return item
+
+
+# ============ BULK IMPORT ============
+@router.get("/import/template")
+def get_item_import_template():
+    """Get CSV template for item import"""
+    return get_item_template()
+
+
+@router.post("/import", response_model=ImportResult)
+def import_items(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.create"))
+):
+    """Bulk import inventory items from CSV file.
+    
+    CSV must have columns: name, sku, category_id, item_type, current_quantity, minimum_quantity
+    Optional: erp_number, barcode, description, parent_id
+    
+    Returns detailed import results with errors by row number.
+    """
+    try:
+        # Read file
+        contents = file.file.read()
+        if not contents:
+            raise ValueError('File is empty')
+        
+        # Parse CSV
+        headers, rows = parse_csv_file(contents)
+        
+        # Validate headers
+        required_headers = ['name', 'sku']
+        is_valid, error_msg = validate_headers(headers, required_headers)
+        if not is_valid:
+            raise ValueError(error_msg)
+        
+        # Validate and parse rows
+        valid_rows, validation_errors = validate_and_parse_rows(rows, ItemImportRow)
+        
+        # Check for duplicates and FK issues
+        all_errors = list(validation_errors)
+        created_count = 0
+        
+        # Create valid items in a transaction
+        try:
+            for item_data in valid_rows:
+                # Check for duplicate SKU
+                existing_sku = db.query(InventoryItem).filter(
+                    InventoryItem.sku == item_data.sku,
+                    InventoryItem.deleted_at == None
+                ).first()
+                
+                if existing_sku:
+                    all_errors.append(ImportError(
+                        row_number=len(all_errors) + 2,
+                        reason=f"Duplicate SKU: '{item_data.sku}'",
+                        values=item_data.model_dump()
+                    ))
+                    continue
+                
+                # Validate category_id if provided
+                if item_data.category_id:
+                    category = db.query(InventoryCategory).filter(
+                        InventoryCategory.id == item_data.category_id
+                    ).first()
+                    if not category:
+                        all_errors.append(ImportError(
+                            row_number=len(all_errors) + 2,
+                            reason=f"Category ID {item_data.category_id} not found",
+                            values=item_data.model_dump()
+                        ))
+                        continue
+                
+                # Validate parent_id if provided
+                if item_data.parent_id:
+                    parent = db.query(InventoryItem).filter(
+                        InventoryItem.id == item_data.parent_id,
+                        InventoryItem.deleted_at == None
+                    ).first()
+                    if not parent:
+                        all_errors.append(ImportError(
+                            row_number=len(all_errors) + 2,
+                            reason=f"Parent item ID {item_data.parent_id} not found",
+                            values=item_data.model_dump()
+                        ))
+                        continue
+                
+                # Create item
+                item = InventoryItem(
+                    name=item_data.name,
+                    sku=item_data.sku,
+                    erp_number=item_data.erp_number,
+                    barcode=item_data.barcode,
+                    category_id=item_data.category_id,
+                    item_type=item_data.item_type,
+                    current_quantity=Decimal(str(item_data.current_quantity)),
+                    minimum_quantity=Decimal(str(item_data.minimum_quantity)),
+                    description=item_data.description,
+                    parent_id=item_data.parent_id,
+                )
+                db.add(item)
+                created_count += 1
+            
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise ValueError(f"Database error: {str(e)}")
+        
+        return ImportResult(
+            success=len(all_errors) == 0,
+            total_rows=len(rows),
+            successful=created_count,
+            failed=len(all_errors),
+            errors=all_errors,
+            message=f"Imported {created_count} items successfully. {len(all_errors)} rows had errors."
+        )
+    
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Import failed: {str(e)}"
+        )

@@ -5,6 +5,8 @@ import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { ArrowLeft, Loader, AlertCircle, Plus, Trash2, MapPin } from 'lucide-react';
 import { useCreateVendor } from '../../hooks/useVendors';
 import { vendorApi, type VendorCreateRequest, type VendorType } from '../../api/vendors';
+import { ErrorAlert } from '../../components/ErrorAlert';
+import { getErrorDetails } from '../../utils/errorMessages';
 
 interface AddressEntry {
   id: string;
@@ -133,12 +135,10 @@ export const VendorFormPage: React.FC = () => {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Error Banner */}
         {formError && (
-          <Card className={cardErrorPadded} padding="lg">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
-              <p className="text-error">{formError}</p>
-            </div>
-          </Card>
+          <ErrorAlert
+            error={formError}
+            onDismiss={() => setFormError('')}
+          />
         )}
 
         {/* Section 1: Vendor Identity */}

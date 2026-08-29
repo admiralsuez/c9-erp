@@ -1043,6 +1043,55 @@ def promote_item_to_parent(
     return item
 
 
+@router.patch("/items/{item_id}/make-parent", response_model=InventoryItemResponse)
+def make_item_parent(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.edit"))
+):
+    """Convert a standalone item to a parent item (can then have children added).
+    
+    Validates:
+    - Item exists and is not deleted
+    - Item is currently standalone (no parent_id and no children)
+    """
+    item = db.query(InventoryItem).filter(
+        InventoryItem.id == item_id,
+        InventoryItem.deleted_at == None
+    ).first()
+    
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found"
+        )
+    
+    # Must be standalone (no parent)
+    if item.parent_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot make this item a parent: it is already a child of another item. Promote it first."
+        )
+    
+    # Check if it already has children
+    has_children = db.query(InventoryItem).filter(
+        InventoryItem.parent_id == item_id,
+        InventoryItem.deleted_at == None
+    ).count() > 0
+    
+    if has_children:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Item is already a parent (has child variants)"
+        )
+    
+    # Mark as container (parent)
+    item.is_container = True
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 # ============ BULK IMPORT ============
 @router.get("/import/template")
 def get_item_import_template():

@@ -371,6 +371,30 @@ export const InventoryDetailPage: React.FC = () => {
     }
   };
 
+  const handleMakeParent = async () => {
+    if (!itemId) return;
+    setIsChangingParent(true);
+    setParentMgmtError('');
+    try {
+      const response = await fetch(`/api/inventory/items/${itemId}/make-parent`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'Failed to make item a parent');
+      }
+      setShowParentMgmt(false);
+      refetch();
+    } catch (err: any) {
+      setParentMgmtError(err.message || 'Failed to make item a parent');
+    } finally {
+      setIsChangingParent(false);
+    }
+  };
+
   if (isLoading) return <ListLoadingState message="Loading item..." />;
 
   if (error || !item) {
@@ -543,15 +567,26 @@ export const InventoryDetailPage: React.FC = () => {
                 <p className="text-sm text-neutral-900 mb-3">
                   <strong>Current Status:</strong> This is a standalone item (not a parent or child)
                 </p>
-                <Button
-                  onClick={() => {
-                    setShowParentMgmt(true);
-                    setParentMgmtError('');
-                  }}
-                  className="text-sm px-3 py-1.5 bg-neutral-600 text-white rounded hover:bg-neutral-700"
-                >
-                  Make This a Child of Another Item
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => {
+                      setShowParentMgmt(true);
+                      setParentMgmtError('');
+                    }}
+                    className="text-sm px-3 py-1.5 bg-neutral-600 text-white rounded hover:bg-neutral-700"
+                  >
+                    Make This a Child of Another Item
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowParentMgmt(true);
+                      setParentMgmtError('');
+                    }}
+                    className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Make This a Parent Item
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -618,6 +653,32 @@ export const InventoryDetailPage: React.FC = () => {
                   >
                     {isChangingParent && <Loader className="w-4 h-4 animate-spin" />}
                     {isChangingParent ? 'Updating...' : selectedParentId === null ? 'Promote to Parent' : 'Set Parent'}
+                  </Button>
+                </div>
+              </>
+            ) : item.children && item.children.length === 0 ? (
+              <>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-900 font-medium mb-2">Make This Item a Parent</p>
+                  <p className="text-xs text-blue-800">
+                    This will allow you to add child variants to this item. You can always change this later.
+                  </p>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    onClick={() => setShowParentMgmt(false)}
+                    disabled={isChangingParent}
+                    className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded hover:bg-neutral-100"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleMakeParent}
+                    disabled={isChangingParent}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isChangingParent && <Loader className="w-4 h-4 animate-spin" />}
+                    {isChangingParent ? 'Updating...' : 'Make Parent'}
                   </Button>
                 </div>
               </>

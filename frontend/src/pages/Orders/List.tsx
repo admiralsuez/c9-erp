@@ -247,10 +247,12 @@ export const OrdersListPage: React.FC = () => {
             const itemSummary = order.items
               .map((item: any) => {
                 const qty = item.quantity_ordered || 0;
-                return `Item #${item.item_id} (${qty})`;
+                const itemName = item.item?.name || item.name || `Item #${item.item_id}`;
+                return `${itemName} (${qty})`;
               })
+              .slice(0, 3)
               .join(', ')
-              .substring(0, 60) + (order.items && order.items.length > 0 && order.items.map((i: any) => `Item #${i.item_id} (${i.quantity_ordered || 0})`).join(', ').length > 60 ? '...' : '');
+              .substring(0, 60) + (order.items && order.items.length > 3 ? '...' : '');
             
             return (
             <Card

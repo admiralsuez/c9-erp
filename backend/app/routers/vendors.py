@@ -330,7 +330,7 @@ def get_vendor_import_template():
 def import_vendors(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("vendors.create"))
 ):
     """Bulk import vendors from CSV file.
     

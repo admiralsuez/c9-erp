@@ -17,6 +17,7 @@ import {
   ClipboardCheck,
   BarChart3,
   Plus,
+  FileUp,
 } from 'lucide-react';
 
 interface NavItem {
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { label: 'Inventory', icon: <Package className="w-5 h-5" />, href: '/inventory' },
   { label: 'Vendors', icon: <Users className="w-5 h-5" />, href: '/vendors' },
   { label: 'Orders', icon: <ShoppingCart className="w-5 h-5" />, href: '/orders' },
+  { label: 'Imports', icon: <FileUp className="w-5 h-5" />, href: '/imports' },
   { label: 'My Approvals', icon: <ClipboardCheck className="w-5 h-5" />, href: '/approvals' },
   { label: 'Reports', icon: <BarChart3 className="w-5 h-5" />, href: '/reports' },
   { label: 'Settings', icon: <Settings className="w-5 h-5" />, href: '/settings' },

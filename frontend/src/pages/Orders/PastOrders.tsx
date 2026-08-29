@@ -264,14 +264,15 @@ export const PastOrdersPage: React.FC = () => {
               </div>
 
               <div className="flex items-end">
-                <button
+                <Button
                   type="button"
                   onClick={addItem}
-                  className="w-full px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700 flex items-center justify-center gap-1"
+                  size="md"
+                  className="w-full flex items-center justify-center gap-1"
                 >
                   <Plus className="w-4 h-4" />
                   Add Item
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -290,13 +291,15 @@ export const PastOrdersPage: React.FC = () => {
                       SKU: {item.sku || 'N/A'} | Qty: {item.quantity_ordered}
                     </p>
                   </div>
-                  <button
+                  <Button
                     type="button"
                     onClick={() => removeItem(item.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded"
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-600 hover:bg-red-50"
                   >
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -348,13 +351,15 @@ export const PastOrdersPage: React.FC = () => {
                       {doc.notes && ` • Notes: ${doc.notes}`}
                     </p>
                   </div>
-                  <button
+                  <Button
                     type="button"
                     onClick={() => removeDocument(idx)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded"
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-600 hover:bg-red-50"
                   >
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -363,18 +368,17 @@ export const PastOrdersPage: React.FC = () => {
 
         {/* Actions */}
         <div className="flex gap-3 justify-end">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => navigate('/orders')}
-            className="px-6 py-2 border border-neutral-300 rounded-lg hover:bg-neutral-50 font-medium text-neutral-900"
           >
             Cancel
-          </button>
+          </Button>
           <Button
             type="submit"
             disabled={isPending || items.length === 0 || !vendorId || !orderDate}
             isLoading={isPending}
-            className="px-6"
           >
             Create Past Order
           </Button>

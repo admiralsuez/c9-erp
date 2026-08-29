@@ -83,6 +83,7 @@ export const InventoryDetailPage: React.FC = () => {
     minimum_quantity: 0,
   });
   const [showParentMgmt, setShowParentMgmt] = useState(false);
+  const [parentMgmtMode, setParentMgmtMode] = useState<'make-child' | 'make-parent' | null>(null);
   const [selectedParentId, setSelectedParentId] = useState<number | null>(item?.parent_id || null);
   const [isChangingParent, setIsChangingParent] = useState(false);
   const [parentMgmtError, setParentMgmtError] = useState('');
@@ -339,6 +340,7 @@ export const InventoryDetailPage: React.FC = () => {
         throw new Error(err.detail || 'Failed to set parent');
       }
       setShowParentMgmt(false);
+      setParentMgmtMode(null);
       refetch();
     } catch (err: any) {
       setParentMgmtError(err.message || 'Failed to set parent');
@@ -363,6 +365,7 @@ export const InventoryDetailPage: React.FC = () => {
         throw new Error(err.detail || 'Failed to promote to parent');
       }
       setShowParentMgmt(false);
+      setParentMgmtMode(null);
       refetch();
     } catch (err: any) {
       setParentMgmtError(err.message || 'Failed to promote to parent');
@@ -387,6 +390,7 @@ export const InventoryDetailPage: React.FC = () => {
         throw new Error(err.detail || 'Failed to make item a parent');
       }
       setShowParentMgmt(false);
+      setParentMgmtMode(null);
       refetch();
     } catch (err: any) {
       setParentMgmtError(err.message || 'Failed to make item a parent');
@@ -571,7 +575,9 @@ export const InventoryDetailPage: React.FC = () => {
                   <Button
                     onClick={() => {
                       setShowParentMgmt(true);
+                      setParentMgmtMode('make-child');
                       setParentMgmtError('');
+                      setSelectedParentId(null);
                     }}
                     className="text-sm px-3 py-1.5 bg-neutral-600 text-white rounded hover:bg-neutral-700"
                   >
@@ -580,6 +586,7 @@ export const InventoryDetailPage: React.FC = () => {
                   <Button
                     onClick={() => {
                       setShowParentMgmt(true);
+                      setParentMgmtMode('make-parent');
                       setParentMgmtError('');
                     }}
                     className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -656,7 +663,7 @@ export const InventoryDetailPage: React.FC = () => {
                   </Button>
                 </div>
               </>
-            ) : item.children && item.children.length === 0 ? (
+            ) : parentMgmtMode === 'make-parent' ? (
               <>
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-900 font-medium mb-2">Make This Item a Parent</p>
@@ -666,7 +673,10 @@ export const InventoryDetailPage: React.FC = () => {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button
-                    onClick={() => setShowParentMgmt(false)}
+                    onClick={() => {
+                      setShowParentMgmt(false);
+                      setParentMgmtMode(null);
+                    }}
                     disabled={isChangingParent}
                     className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded hover:bg-neutral-100"
                   >

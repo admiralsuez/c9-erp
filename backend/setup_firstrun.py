@@ -69,6 +69,7 @@ def setup_roles_permissions(db):
         # Create permissions
         permissions_data = [
             ("dashboard.view", "View analytics dashboard"),
+            ("vendors.create", "Create vendors"),
             ("inventory.create", "Create inventory items"),
             ("inventory.edit", "Edit inventory"),
             ("inventory.dispatch", "Dispatch inventory"),

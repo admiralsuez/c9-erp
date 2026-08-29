@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button } from '../../components/ui';
-import { cardErrorPadded, formLabel } from '../../styles/classNames';
-import { ArrowLeft, Loader, AlertCircle, Plus, Trash2, MapPin } from 'lucide-react';
+import { formLabel } from '../../styles/classNames';
+import { ArrowLeft, Loader, Plus, Trash2, MapPin } from 'lucide-react';
 import { useCreateVendor } from '../../hooks/useVendors';
 import { vendorApi, type VendorCreateRequest, type VendorType } from '../../api/vendors';
 import { ErrorAlert } from '../../components/ErrorAlert';
-import { getErrorDetails } from '../../utils/errorMessages';
 
 interface AddressEntry {
   id: string;

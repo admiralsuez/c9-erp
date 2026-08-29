@@ -4,11 +4,10 @@ import { Challan } from '../../components/Challan';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Card, Button, ListLoadingState, StatusBadge } from '../../components/ui';
-import { cardError, cardErrorPadded, formLabel } from '../../styles/classNames';
+import { formLabel } from '../../styles/classNames';
 import {
   ArrowLeft,
   Loader,
-  AlertCircle,
   Send,
   Upload,
   CheckCircle,
@@ -44,7 +43,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { useSignature, useUploadDocument, useOrderDocuments, useDownloadDocument, useApprovers } from '../../hooks/useSettings';
 import { formatDate, formatDateTime } from '../../utils/format';
 import { ErrorBanner } from '../../components/ErrorAlert';
-import { getErrorDetails } from '../../utils/errorMessages';
 
 const STATUS_FLOW = [
   'draft',

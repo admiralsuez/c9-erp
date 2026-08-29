@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertCircle, X } from 'lucide-react';
-import { getErrorDetails, ErrorDetails } from '../utils/errorMessages';
+import { getErrorDetails } from '../utils/errorMessages';
 
 interface ErrorAlertProps {
   error: any;

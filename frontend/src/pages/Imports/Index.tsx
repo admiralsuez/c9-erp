@@ -52,7 +52,7 @@ const ImportSection: React.FC<{
         URL.revokeObjectURL(url);
         toast.success('Template downloaded');
       })
-      .catch(err => toast.error('Failed to download template'));
+      .catch(() => toast.error('Failed to download template'));
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

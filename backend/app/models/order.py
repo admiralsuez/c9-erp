@@ -63,10 +63,11 @@ class Notification(Base):
     actor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     title = Column(String(200), nullable=False)
     message = Column(Text)
-    type = Column(String(50), default="info")
+    type = Column(String(50), default="info")  # info | warning | approval | success | error
     related_entity_type = Column(String(50))
     related_entity_id = Column(Integer)
     is_read = Column(Boolean, default=False)
+    is_approved = Column(Boolean, default=False, nullable=False)  # For approval notifications - persists until approved
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     
     user = relationship("User", foreign_keys=[user_id])
@@ -75,6 +76,7 @@ class Notification(Base):
     __table_args__ = (
         Index("idx_notifications_user", "user_id"),
         Index("idx_notifications_unread", "user_id", "is_read"),
+        Index("idx_notifications_approval", "user_id", "type", "is_approved"),
     )
 
 

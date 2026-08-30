@@ -7,10 +7,11 @@ export interface NotificationResponse {
   actor_name: string | null;
   title: string;
   message: string | null;
-  type: string;
+  type: string;  // info | warning | approval | success | error
   related_entity_type: string | null;
   related_entity_id: number | null;
   is_read: boolean;
+  is_approved: boolean;  // For approval notifications - persists until approved
   created_at: string;
 }
 
@@ -33,5 +34,9 @@ export const notificationsApi = {
 
   markAllRead: async (): Promise<void> => {
     await apiClient.post('/notifications/mark-all-read');
+  },
+
+  approve: async (notificationId: number): Promise<void> => {
+    await apiClient.post(`/notifications/${notificationId}/approve`);
   },
 };

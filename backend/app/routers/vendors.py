@@ -151,6 +151,74 @@ def create_vendor_type(body: VendorTypeCreate, db: Session = Depends(get_db), cu
     return vt
 
 
+@router.get("/types/{type_id}/vendors-using")
+def get_vendors_using_type(type_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Get vendors using a specific vendor type."""
+    vt = db.query(VendorType).filter(VendorType.id == type_id).first()
+    if not vt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vendor type not found")
+    
+    vendors = db.query(Vendor).filter(
+        Vendor.vendor_type_id == type_id,
+        Vendor.deleted_at == None
+    ).all()
+    
+    return {
+        "vendor_type": vt,
+        "vendors": [VendorResponse.model_validate(v) for v in vendors],
+        "count": len(vendors)
+    }
+
+
+@router.post("/types/{type_id}/reassign-and-delete")
+def reassign_vendors_and_delete_type(
+    type_id: int,
+    new_type_id: int = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Reassign all vendors to a new type and delete the old type."""
+    vt = db.query(VendorType).filter(VendorType.id == type_id).first()
+    if not vt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vendor type not found")
+    
+    vendors = db.query(Vendor).filter(
+        Vendor.vendor_type_id == type_id,
+        Vendor.deleted_at == None
+    ).all()
+    
+    if len(vendors) == 0:
+        # No vendors using this type, just delete it
+        db.delete(vt)
+        db.commit()
+        return {"message": "Vendor type deleted successfully"}
+    
+    if new_type_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot delete: {len(vendors)} vendor(s) use this type. Provide new_type_id to reassign them."
+        )
+    
+    # Verify new type exists
+    new_type = db.query(VendorType).filter(VendorType.id == new_type_id).first()
+    if not new_type:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="New vendor type not found")
+    
+    # Reassign all vendors
+    for vendor in vendors:
+        vendor.vendor_type_id = new_type_id
+    
+    # Delete old type
+    db.delete(vt)
+    db.commit()
+    
+    return {
+        "message": f"Reassigned {len(vendors)} vendor(s) to {new_type.name} and deleted {vt.name}",
+        "reassigned_count": len(vendors),
+        "new_type": VendorTypeResponse.model_validate(new_type)
+    }
+
+
 @router.delete("/types/{type_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_vendor_type(type_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     vt = db.query(VendorType).filter(VendorType.id == type_id).first()

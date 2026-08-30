@@ -156,10 +156,11 @@ def submit_requisition(
         actor_id=current_user.id,
         title="Requisition Pending Approval",
         message=f"Requisition {order.order_number} requires your approval.",
-        type="approval_required",
+        type="approval",  # Changed from approval_required to approval
         related_entity_type="order",
         related_entity_id=order.id,
-        is_read=False
+        is_read=False,
+        is_approved=False  # Will be marked as approved when user approves
     )
     db.add(notification)
     

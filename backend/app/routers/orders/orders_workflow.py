@@ -211,13 +211,13 @@ def approve_with_signature(
     )
     db.flush()
     
-    # Mark approval notification as read
+    # Mark approval notification as approved (this will be deleted by the approve endpoint)
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.related_entity_type == "order",
         Notification.related_entity_id == order.id,
-        Notification.type == "approval_required"
-    ).update({"is_read": True})
+        Notification.type == "approval"
+    ).update({"is_approved": True, "is_read": True})
     
     # Notify creator that order was approved
     if order.approver_id and order.created_by and order.created_by != current_user.id:

@@ -487,6 +487,11 @@ export const CategoriesSection: React.FC = () => {
   const [vendorTypes, setVendorTypes] = useState<Array<{ id: number; name: string }>>([]);
   const [isLoadingVendorTypes, setIsLoadingVendorTypes] = useState(false);
   const [vendorTypeError, setVendorTypeError] = useState<string | null>(null);
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [typeToDelete, setTypeToDelete] = useState<{ id: number; name: string } | null>(null);
+  const [selectedNewType, setSelectedNewType] = useState<number | null>(null);
+  const [vendorsToReassign, setVendorsToReassign] = useState<Array<{ id: number; name: string }>>([]);
+  const [isReassigning, setIsReassigning] = useState(false);
 
   // Fetch vendor types when expanding vendors section
   const expandSection = (section: 'items' | 'vendors') => {
@@ -548,26 +553,52 @@ export const CategoriesSection: React.FC = () => {
   };
 
   const confirmDelete = (itemId: number) => {
-    const msg = activeSection === 'items'
-      ? 'Delete this category? Items in this category will become uncategorized.'
-      : 'Delete this vendor type? This will affect all vendors using this type.';
-    if (window.confirm(msg)) {
-      if (activeSection === 'items') {
+    if (activeSection === 'items') {
+      if (window.confirm('Delete this category? Items in this category will become uncategorized.')) {
         deleteCategory.mutate(itemId);
-      } else if (activeSection === 'vendors') {
-        fetch(`/api/vendors/types/${itemId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          },
-        })
-          .then(r => {
-            if (!r.ok) throw new Error('Failed to delete');
-            setVendorTypes(vendorTypes.filter(v => v.id !== itemId));
-          })
-          .catch(err => setVendorTypeError(err.message));
       }
+    } else if (activeSection === 'vendors') {
+      // Check if vendors are using this type
+      const typeItem = vendorTypes.find(v => v.id === itemId);
+      if (!typeItem) return;
+      
+      setTypeToDelete(typeItem);
+      setSelectedNewType(null);
+      
+      // Fetch vendors using this type
+      fetch(`/api/vendors/types/${itemId}/vendors-using`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.count > 0) {
+            setVendorsToReassign(data.vendors);
+            setShowReassignModal(true);
+          } else {
+            // No vendors using this type, delete directly
+            deleteVendorType(itemId, null);
+          }
+        })
+        .catch(err => setVendorTypeError(err.message));
     }
+  };
+
+  const deleteVendorType = (typeId: number, newTypeId: number | null) => {
+    setIsReassigning(true);
+    const params = newTypeId ? `?new_type_id=${newTypeId}` : '';
+    fetch(`/api/vendors/types/${typeId}/reassign-and-delete${params}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+    })
+      .then(r => {
+        if (!r.ok) throw new Error('Failed to delete');
+        setVendorTypes(vendorTypes.filter(v => v.id !== typeId));
+        setShowReassignModal(false);
+        setTypeToDelete(null);
+        setSelectedNewType(null);
+      })
+      .catch(err => setVendorTypeError(err.message))
+      .finally(() => setIsReassigning(false));
   };
 
   // Helper component for section rendering
@@ -661,13 +692,75 @@ export const CategoriesSection: React.FC = () => {
   };
 
   return (
-    <Card padding="lg">
-      <h2 className="text-lg font-semibold text-neutral-900 mb-4">Item Categories</h2>
-      <div className="space-y-3">
-        {renderSection('Item Categories', 'items', categories, isLoading, error ? 'Failed to load categories' : null)}
-        {renderSection('Vendor Types', 'vendors', vendorTypes, isLoadingVendorTypes, vendorTypeError)}
-      </div>
-    </Card>
+    <>
+      {/* Reassignment Modal */}
+      {showReassignModal && typeToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card padding="lg" className="max-w-md w-full">
+            <h3 className="text-lg font-semibold text-neutral-900 mb-4">Reassign Vendors</h3>
+            <p className="text-sm text-neutral-600 mb-4">
+              {vendorsToReassign.length} vendor(s) are using "{typeToDelete.name}". Please select a new vendor type to reassign them to:
+            </p>
+            <div className="mb-4 max-h-48 overflow-y-auto p-3 bg-neutral-50 rounded-lg border border-neutral-200">
+              {vendorsToReassign.map((vendor) => (
+                <div key={vendor.id} className="text-sm text-neutral-700 py-1">
+                  • {vendor.name}
+                </div>
+              ))}
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-neutral-900 mb-2">New Vendor Type</label>
+              <select
+                value={selectedNewType || ''}
+                onChange={(e) => setSelectedNewType(Number(e.target.value) || null)}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">Select a vendor type...</option>
+                {vendorTypes
+                  .filter((v) => v.id !== typeToDelete.id)
+                  .map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setShowReassignModal(false);
+                  setTypeToDelete(null);
+                  setSelectedNewType(null);
+                }}
+                className="flex-1 px-3 py-2 border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-sm"
+                disabled={isReassigning}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (typeToDelete && selectedNewType) {
+                    deleteVendorType(typeToDelete.id, selectedNewType);
+                  }
+                }}
+                disabled={!selectedNewType || isReassigning}
+                className="flex-1 px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 text-sm disabled:opacity-50"
+              >
+                {isReassigning ? 'Reassigning...' : 'Reassign & Delete'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      <Card padding="lg">
+        <h2 className="text-lg font-semibold text-neutral-900 mb-4">Item Categories</h2>
+        <div className="space-y-3">
+          {renderSection('Item Categories', 'items', categories, isLoading, error ? 'Failed to load categories' : null)}
+          {renderSection('Vendor Types', 'vendors', vendorTypes, isLoadingVendorTypes, vendorTypeError)}
+        </div>
+      </Card>
+    </>
   );
 };
 

@@ -1,15 +1,16 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button, ListLoadingState, ListEmptyState } from '../../components/ui';
-import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '../../hooks/useNotifications';
+import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead, useApproveNotification } from '../../hooks/useNotifications';
 import { formatDateTime } from '../../utils/format';
-import { Bell, CheckCheck, ArrowLeft, Eye } from 'lucide-react';
+import { Bell, CheckCheck, ArrowLeft, Eye, Check } from 'lucide-react';
 
 export const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
   const { data: notifications, isLoading } = useNotifications();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
+  const approve = useApproveNotification();
 
   const handleClick = (n: any) => {
     if (!n.is_read) {
@@ -54,14 +55,16 @@ export const NotificationsPage: React.FC = () => {
             <Card
               key={n.id}
               padding="md"
-              className={`cursor-pointer hover:shadow-sm transition-shadow ${!n.is_read ? 'bg-primary-50/50 border-primary-200' : ''}`}
-              onClick={() => handleClick(n)}
+              className={`hover:shadow-sm transition-shadow ${!n.is_read ? 'bg-primary-50/50 border-primary-200' : ''} ${n.type === 'approval' ? 'border-amber-200 bg-amber-50/50' : ''}`}
             >
               <div className="flex items-start gap-3">
-                <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${n.is_read ? 'bg-neutral-300' : 'bg-primary-600'}`} />
+                <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${n.is_read ? 'bg-neutral-300' : n.type === 'approval' ? 'bg-amber-600' : 'bg-primary-600'}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <p className={`text-sm ${n.is_read ? 'text-neutral-600' : 'font-semibold text-neutral-900'}`}>
+                    <p 
+                      className={`text-sm cursor-pointer ${n.is_read ? 'text-neutral-600' : 'font-semibold text-neutral-900'}`}
+                      onClick={() => handleClick(n)}
+                    >
                       {n.title}
                     </p>
                     <span className="text-xs text-neutral-500 flex-shrink-0">
@@ -75,9 +78,25 @@ export const NotificationsPage: React.FC = () => {
                     <p className="text-xs text-neutral-500 mt-0.5">{n.message}</p>
                   )}
                 </div>
-                {!n.is_read && (
-                  <Eye className="w-4 h-4 text-primary-600 flex-shrink-0 mt-1" />
-                )}
+                <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+                  {n.type === 'approval' && !n.is_approved && (
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        approve.mutate(n.id);
+                      }}
+                      disabled={approve.isPending}
+                    >
+                      <Check className="w-3 h-3" />
+                      Approve
+                    </Button>
+                  )}
+                  {!n.is_read && !n.type.includes('approval') && (
+                    <Eye className="w-4 h-4 text-primary-600" />
+                  )}
+                </div>
               </div>
             </Card>
           ))}

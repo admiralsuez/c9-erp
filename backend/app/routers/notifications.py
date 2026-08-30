@@ -22,6 +22,7 @@ def _notif_to_response(n: Notification) -> NotificationResponse:
         related_entity_type=n.related_entity_type,
         related_entity_id=n.related_entity_id,
         is_read=n.is_read,
+        is_approved=n.is_approved,
         created_at=n.created_at,
     )
 
@@ -93,4 +94,29 @@ def mark_all_notifications_read(
         Notification.user_id == current_user.id,
         Notification.is_read == False
     ).update({"is_read": True})
+    db.commit()
+
+
+@router.post("/{notification_id}/approve", status_code=status.HTTP_204_NO_CONTENT)
+def approve_notification(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Mark an approval notification as approved and remove it."""
+    notification = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.user_id == current_user.id
+    ).first()
+    
+    if not notification:
+        require_found(notification, "Notification", notification_id)
+    
+    # Mark as approved
+    notification.is_approved = True
+    notification.is_read = True
+    db.commit()
+    
+    # Delete the notification after approval
+    db.delete(notification)
     db.commit()

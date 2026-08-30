@@ -43,3 +43,14 @@ export const useMarkAllNotificationsRead = () => {
     },
   });
 };
+
+export const useApproveNotification = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (notificationId: number) => notificationsApi.approve(notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+    },
+  });
+};

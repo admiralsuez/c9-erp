@@ -99,10 +99,11 @@ class NotificationResponse(BaseModel):
     actor_name: Optional[str] = None
     title: str
     message: Optional[str] = None
-    type: str
+    type: str  # info | warning | approval | success | error
     related_entity_type: Optional[str] = None
     related_entity_id: Optional[int] = None
     is_read: bool
+    is_approved: bool = False  # For approval notifications
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

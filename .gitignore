@@ -86,6 +86,7 @@ logs/
 *.md
 !README.md
 !docs/
+!DEPLOYMENT_INSTRUCTIONS.md
 
 # Uncomment to ignore media files in source:
 # *.pdf

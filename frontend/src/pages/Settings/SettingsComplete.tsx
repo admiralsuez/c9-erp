@@ -61,8 +61,8 @@ const settingsSections: SettingsSection[] = [
   },
   {
     id: 'categories',
-    title: 'Item Categories',
-    description: 'Create and manage inventory item categories',
+    title: 'Categories & Types',
+    description: 'Manage inventory categories, vendor types, and order types',
     icon: <Tag className="w-6 h-6" />,
     color: 'bg-success/10 text-success',
   },

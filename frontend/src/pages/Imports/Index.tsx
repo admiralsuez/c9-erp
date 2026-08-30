@@ -196,9 +196,18 @@ export const ImportsPage: React.FC = () => {
         ? '/api/inventory/items/import'
         : '/api/orders/import';
 
+      // Get token from localStorage
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        throw new Error('Not authenticated. Please log in.');
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
       const data = await response.json();

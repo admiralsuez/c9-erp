@@ -474,56 +474,148 @@ export const WarehouseSection: React.FC = () => {
   );
 };
 
-// ============ ITEM CATEGORIES SECTION ============
+// ============ CATEGORIES & TYPES SECTION ============
 export const CategoriesSection: React.FC = () => {
   const { data: categories = [], isLoading, error } = useCategories();
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
-  const [newCategory, setNewCategory] = useState('');
+  const [newItem, setNewItem] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
+  const [activeTab, setActiveTab] = useState<'items' | 'vendors'>('items');
+  const [vendorTypes, setVendorTypes] = useState<Array<{ id: number; name: string }>>([]);
+  const [isLoadingVendorTypes, setIsLoadingVendorTypes] = useState(false);
+  const [vendorTypeError, setVendorTypeError] = useState<string | null>(null);
 
-  const addCategory = () => {
-    if (!newCategory.trim()) return;
-    createCategory.mutate({ name: newCategory.trim() }, { onSuccess: () => setNewCategory('') });
+  // Fetch vendor types on mount and when switching to vendors tab
+  React.useEffect(() => {
+    if (activeTab === 'vendors') {
+      setIsLoadingVendorTypes(true);
+      fetch('/api/vendors/types', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+      })
+        .then(r => r.json())
+        .then(data => { setVendorTypes(Array.isArray(data) ? data : []); setVendorTypeError(null); })
+        .catch(err => setVendorTypeError(err.message))
+        .finally(() => setIsLoadingVendorTypes(false));
+    }
+  }, [activeTab]);
+
+  const addItem = () => {
+    if (!newItem.trim()) return;
+    if (activeTab === 'items') {
+      createCategory.mutate({ name: newItem.trim() }, { onSuccess: () => setNewItem('') });
+    } else if (activeTab === 'vendors') {
+      fetch('/api/vendors/types', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: JSON.stringify({ name: newItem.trim() }),
+      })
+        .then(r => {
+          if (!r.ok) throw new Error('Failed to create vendor type');
+          setNewItem('');
+          // Refresh the list
+          return fetch('/api/vendors/types', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+          }).then(res => res.json()).then(data => setVendorTypes(Array.isArray(data) ? data : []));
+        })
+        .catch(err => setVendorTypeError(err.message));
+    }
   };
 
-  const startEdit = (cat: { id: number; name: string }) => {
-    setEditingId(cat.id);
-    setEditName(cat.name);
+  const startEdit = (item: { id: number; name: string }) => {
+    setEditingId(item.id);
+    setEditName(item.name);
   };
 
   const saveEdit = () => {
     if (!editName.trim() || editingId === null) return;
-    updateCategory.mutate(
-      { categoryId: editingId, data: { name: editName.trim() } },
-      { onSuccess: () => setEditingId(null) }
-    );
-  };
-
-  const confirmDelete = (catId: number) => {
-    if (window.confirm('Delete this category? Items in this category will become uncategorized.')) {
-      deleteCategory.mutate(catId);
+    if (activeTab === 'items') {
+      updateCategory.mutate(
+        { categoryId: editingId, data: { name: editName.trim() } },
+        { onSuccess: () => setEditingId(null) }
+      );
     }
   };
 
+  const confirmDelete = (itemId: number) => {
+    const msg = activeTab === 'items'
+      ? 'Delete this category? Items in this category will become uncategorized.'
+      : 'Delete this vendor type? This will affect all vendors using this type.';
+    if (window.confirm(msg)) {
+      if (activeTab === 'items') {
+        deleteCategory.mutate(itemId);
+      } else if (activeTab === 'vendors') {
+        fetch(`/api/vendors/types/${itemId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          },
+        })
+          .then(r => {
+            if (!r.ok) throw new Error('Failed to delete');
+            setVendorTypes(vendorTypes.filter(v => v.id !== itemId));
+          })
+          .catch(err => setVendorTypeError(err.message));
+      }
+    }
+  };
+
+  const items = activeTab === 'items' ? categories : vendorTypes;
+  const isLoading_ = activeTab === 'items' ? isLoading : isLoadingVendorTypes;
+  const error_ = activeTab === 'items' ? error : vendorTypeError;
+
   return (
     <Card padding="lg">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-neutral-900">Item Categories</h2>
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-neutral-900 mb-4">Categories & Types</h2>
+        <div className="flex gap-2 border-b border-neutral-200">
+          <button
+            onClick={() => { setActiveTab('items'); setEditingId(null); }}
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'items' ? 'border-primary-600 text-primary-600' : 'border-transparent text-neutral-600 hover:text-neutral-900'}`}
+          >
+            Item Categories
+          </button>
+          <button
+            onClick={() => { setActiveTab('vendors'); setEditingId(null); }}
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'vendors' ? 'border-primary-600 text-primary-600' : 'border-transparent text-neutral-600 hover:text-neutral-900'}`}
+          >
+            Vendor Types
+          </button>
+        </div>
       </div>
+
       <div className="mb-6 p-4 bg-neutral-50 rounded-lg border border-neutral-200 flex gap-2">
-        <input type="text" placeholder="Category Name" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg text-sm" />
-        <Button onClick={addCategory} disabled={!newCategory.trim() || createCategory.isPending} className="px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 text-sm disabled:opacity-50">Add</Button>
+        <input
+          type="text"
+          placeholder={activeTab === 'items' ? 'Category Name' : 'Type Name'}
+          value={newItem}
+          onChange={(e) => setNewItem(e.target.value)}
+          className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+        />
+        <Button
+          onClick={addItem}
+          disabled={!newItem.trim() || createCategory.isPending || isLoading_}
+          className="px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 text-sm disabled:opacity-50"
+        >
+          Add
+        </Button>
       </div>
-      {isLoading && <Loader className="w-5 h-5 animate-spin" />}
-      {error && <ErrorMessage message="Could not load categories." />}
-      {(createCategory.error || updateCategory.error || deleteCategory.error) && <ErrorMessage message="Could not perform category operation." />}
+
+      {isLoading_ && <Loader className="w-5 h-5 animate-spin" />}
+      {error_ && <ErrorMessage message={`Could not load ${activeTab === 'items' ? 'categories' : 'types'}.`} />}
+      {(createCategory.error || updateCategory.error || deleteCategory.error) && (
+        <ErrorMessage message="Could not perform operation." />
+      )}
+
       <div className="space-y-2">
-        {categories.map((cat) => (
-          <div key={cat.id} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg border border-neutral-100">
-            {editingId === cat.id ? (
+        {items.map((item) => (
+          <div key={item.id} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg border border-neutral-100">
+            {editingId === item.id ? (
               <div className="flex-1 flex gap-2 items-center">
                 <input
                   type="text"
@@ -532,23 +624,42 @@ export const CategoriesSection: React.FC = () => {
                   className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg text-sm"
                   autoFocus
                 />
-                <Button onClick={saveEdit} disabled={!editName.trim() || updateCategory.isPending} className="px-3 py-1 bg-primary-600 text-white text-xs">Save</Button>
-                <Button onClick={() => setEditingId(null)} className="px-3 py-1 border border-neutral-300 text-neutral-700 text-xs">Cancel</Button>
+                <Button
+                  onClick={saveEdit}
+                  disabled={!editName.trim() || updateCategory.isPending}
+                  className="px-3 py-1 bg-primary-600 text-white text-xs"
+                >
+                  Save
+                </Button>
+                <Button onClick={() => setEditingId(null)} className="px-3 py-1 border border-neutral-300 text-neutral-700 text-xs">
+                  Cancel
+                </Button>
               </div>
             ) : (
               <>
                 <div>
-                  <p className="font-medium text-neutral-900">{cat.name}</p>
-                  <p className="text-xs text-neutral-600">{cat.parent_id ? `Parent #${cat.parent_id}` : 'Root category'}</p>
+                  <p className="font-medium text-neutral-900">{item.name}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => startEdit(cat)} className="p-1 text-primary-600 hover:bg-primary-50 rounded"><Edit2 className="w-4 h-4" /></button>
-                  <button onClick={() => confirmDelete(cat.id)} className="p-1 text-error hover:bg-error/10 rounded"><Trash2 className="w-4 h-4" /></button>
+                  {activeTab === 'items' && (
+                    <button onClick={() => startEdit(item)} className="p-1 text-primary-600 hover:bg-primary-50 rounded">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => confirmDelete(item.id)}
+                    className="p-1 text-error hover:bg-error/10 rounded"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </>
             )}
           </div>
         ))}
+        {items.length === 0 && !isLoading_ && (
+          <p className="text-center text-neutral-600 py-4 text-sm">No {activeTab === 'items' ? 'categories' : 'types'} yet</p>
+        )}
       </div>
     </Card>
   );

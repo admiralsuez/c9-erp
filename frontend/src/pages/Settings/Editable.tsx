@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Button, ListLoadingState } from '../../components/ui';
 import { formLabel } from '../../styles/classNames';
-import { X, Plus, Edit2, Trash2, Loader, AlertCircle, Download, Upload, History, Clock } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, Loader, AlertCircle, Download, Upload, History, Clock, ChevronRight } from 'lucide-react';
 import {
   useSettings,
   useUpdateSettings,
@@ -569,10 +569,6 @@ export const CategoriesSection: React.FC = () => {
       }
     }
   };
-
-  const items = activeSection === 'items' ? categories : vendorTypes;
-  const isLoading_ = activeSection === 'items' ? isLoading : isLoadingVendorTypes;
-  const error_ = activeSection === 'items' ? error : vendorTypeError;
 
   // Helper component for section rendering
   const renderSection = (title: string, sectionKey: 'items' | 'vendors', data: Array<{ id: number; name: string }>, isLoadingSec: boolean, errorSec: string | null) => {

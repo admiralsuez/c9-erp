@@ -483,14 +483,19 @@ export const CategoriesSection: React.FC = () => {
   const [newItem, setNewItem] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
-  const [activeTab, setActiveTab] = useState<'items' | 'vendors'>('items');
+  const [activeSection, setActiveSection] = useState<'items' | 'vendors' | null>(null);
   const [vendorTypes, setVendorTypes] = useState<Array<{ id: number; name: string }>>([]);
   const [isLoadingVendorTypes, setIsLoadingVendorTypes] = useState(false);
   const [vendorTypeError, setVendorTypeError] = useState<string | null>(null);
 
-  // Fetch vendor types on mount and when switching to vendors tab
-  React.useEffect(() => {
-    if (activeTab === 'vendors') {
+  // Fetch vendor types when expanding vendors section
+  const expandSection = (section: 'items' | 'vendors') => {
+    if (activeSection === section) {
+      setActiveSection(null);
+      return;
+    }
+    setActiveSection(section);
+    if (section === 'vendors' && vendorTypes.length === 0) {
       setIsLoadingVendorTypes(true);
       fetch('/api/vendors/types', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
@@ -500,13 +505,13 @@ export const CategoriesSection: React.FC = () => {
         .catch(err => setVendorTypeError(err.message))
         .finally(() => setIsLoadingVendorTypes(false));
     }
-  }, [activeTab]);
+  };
 
   const addItem = () => {
     if (!newItem.trim()) return;
-    if (activeTab === 'items') {
+    if (activeSection === 'items') {
       createCategory.mutate({ name: newItem.trim() }, { onSuccess: () => setNewItem('') });
-    } else if (activeTab === 'vendors') {
+    } else if (activeSection === 'vendors') {
       fetch('/api/vendors/types', {
         method: 'POST',
         headers: {
@@ -534,7 +539,7 @@ export const CategoriesSection: React.FC = () => {
 
   const saveEdit = () => {
     if (!editName.trim() || editingId === null) return;
-    if (activeTab === 'items') {
+    if (activeSection === 'items') {
       updateCategory.mutate(
         { categoryId: editingId, data: { name: editName.trim() } },
         { onSuccess: () => setEditingId(null) }
@@ -543,13 +548,13 @@ export const CategoriesSection: React.FC = () => {
   };
 
   const confirmDelete = (itemId: number) => {
-    const msg = activeTab === 'items'
+    const msg = activeSection === 'items'
       ? 'Delete this category? Items in this category will become uncategorized.'
       : 'Delete this vendor type? This will affect all vendors using this type.';
     if (window.confirm(msg)) {
-      if (activeTab === 'items') {
+      if (activeSection === 'items') {
         deleteCategory.mutate(itemId);
-      } else if (activeTab === 'vendors') {
+      } else if (activeSection === 'vendors') {
         fetch(`/api/vendors/types/${itemId}`, {
           method: 'DELETE',
           headers: {
@@ -565,101 +570,106 @@ export const CategoriesSection: React.FC = () => {
     }
   };
 
-  const items = activeTab === 'items' ? categories : vendorTypes;
-  const isLoading_ = activeTab === 'items' ? isLoading : isLoadingVendorTypes;
-  const error_ = activeTab === 'items' ? error : vendorTypeError;
+  const items = activeSection === 'items' ? categories : vendorTypes;
+  const isLoading_ = activeSection === 'items' ? isLoading : isLoadingVendorTypes;
+  const error_ = activeSection === 'items' ? error : vendorTypeError;
+
+  // Helper component for section rendering
+  const renderSection = (title: string, sectionKey: 'items' | 'vendors', data: Array<{ id: number; name: string }>, isLoadingSec: boolean, errorSec: string | null) => {
+    const isExpanded = activeSection === sectionKey;
+    return (
+      <div key={sectionKey} className="border border-neutral-200 rounded-lg overflow-hidden">
+        {/* Section Header - Click to expand/collapse */}
+        <button
+          onClick={() => expandSection(sectionKey)}
+          className="w-full flex items-center justify-between p-4 bg-neutral-50 hover:bg-neutral-100 transition-colors"
+        >
+          <h3 className="text-base font-semibold text-neutral-900">{title}</h3>
+          <ChevronRight className={`w-5 h-5 text-neutral-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+        </button>
+
+        {/* Section Content - Shows when expanded */}
+        {isExpanded && (
+          <div className="p-4 bg-white space-y-3 border-t border-neutral-200">
+            {/* Add new item form */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder={sectionKey === 'items' ? 'New category name...' : 'New vendor type...'}
+                value={activeSection === sectionKey ? newItem : ''}
+                onChange={(e) => setNewItem(e.target.value)}
+                className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+              />
+              <Button
+                onClick={addItem}
+                disabled={!newItem.trim() || createCategory.isPending || isLoadingSec}
+                className="px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 text-sm disabled:opacity-50"
+              >
+                Add
+              </Button>
+            </div>
+
+            {/* Loading state */}
+            {isLoadingSec && <div className="flex justify-center py-4"><Loader className="w-5 h-5 animate-spin" /></div>}
+            
+            {/* Error state */}
+            {errorSec && <ErrorMessage message={errorSec} />}
+
+            {/* Items list */}
+            <div className="space-y-2">
+              {data.map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg border border-neutral-100">
+                  {editingId === item.id ? (
+                    <div className="flex-1 flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+                        autoFocus
+                      />
+                      <Button
+                        onClick={saveEdit}
+                        disabled={!editName.trim() || updateCategory.isPending}
+                        className="px-3 py-1 bg-primary-600 text-white text-xs"
+                      >
+                        Save
+                      </Button>
+                      <Button onClick={() => setEditingId(null)} className="px-3 py-1 border border-neutral-300 text-neutral-700 text-xs">
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="font-medium text-neutral-900">{item.name}</p>
+                      <div className="flex items-center gap-2">
+                        {sectionKey === 'items' && (
+                          <button onClick={() => startEdit(item)} className="p-1 text-primary-600 hover:bg-primary-50 rounded">
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button onClick={() => confirmDelete(item.id)} className="p-1 text-error hover:bg-error/10 rounded">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+              {data.length === 0 && !isLoadingSec && <p className="text-center text-neutral-600 py-3 text-sm">No items yet</p>}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Card padding="lg">
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-neutral-900 mb-4">Categories & Types</h2>
-        <div className="flex gap-2 border-b border-neutral-200">
-          <button
-            onClick={() => { setActiveTab('items'); setEditingId(null); }}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'items' ? 'border-primary-600 text-primary-600' : 'border-transparent text-neutral-600 hover:text-neutral-900'}`}
-          >
-            Item Categories
-          </button>
-          <button
-            onClick={() => { setActiveTab('vendors'); setEditingId(null); }}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'vendors' ? 'border-primary-600 text-primary-600' : 'border-transparent text-neutral-600 hover:text-neutral-900'}`}
-          >
-            Vendor Types
-          </button>
-        </div>
-      </div>
-
-      <div className="mb-6 p-4 bg-neutral-50 rounded-lg border border-neutral-200 flex gap-2">
-        <input
-          type="text"
-          placeholder={activeTab === 'items' ? 'Category Name' : 'Type Name'}
-          value={newItem}
-          onChange={(e) => setNewItem(e.target.value)}
-          className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg text-sm"
-        />
-        <Button
-          onClick={addItem}
-          disabled={!newItem.trim() || createCategory.isPending || isLoading_}
-          className="px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 text-sm disabled:opacity-50"
-        >
-          Add
-        </Button>
-      </div>
-
-      {isLoading_ && <Loader className="w-5 h-5 animate-spin" />}
-      {error_ && <ErrorMessage message={`Could not load ${activeTab === 'items' ? 'categories' : 'types'}.`} />}
-      {(createCategory.error || updateCategory.error || deleteCategory.error) && (
-        <ErrorMessage message="Could not perform operation." />
-      )}
-
-      <div className="space-y-2">
-        {items.map((item) => (
-          <div key={item.id} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg border border-neutral-100">
-            {editingId === item.id ? (
-              <div className="flex-1 flex gap-2 items-center">
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg text-sm"
-                  autoFocus
-                />
-                <Button
-                  onClick={saveEdit}
-                  disabled={!editName.trim() || updateCategory.isPending}
-                  className="px-3 py-1 bg-primary-600 text-white text-xs"
-                >
-                  Save
-                </Button>
-                <Button onClick={() => setEditingId(null)} className="px-3 py-1 border border-neutral-300 text-neutral-700 text-xs">
-                  Cancel
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <p className="font-medium text-neutral-900">{item.name}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {activeTab === 'items' && (
-                    <button onClick={() => startEdit(item)} className="p-1 text-primary-600 hover:bg-primary-50 rounded">
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => confirmDelete(item.id)}
-                    className="p-1 text-error hover:bg-error/10 rounded"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
-        {items.length === 0 && !isLoading_ && (
-          <p className="text-center text-neutral-600 py-4 text-sm">No {activeTab === 'items' ? 'categories' : 'types'} yet</p>
-        )}
+      <h2 className="text-lg font-semibold text-neutral-900 mb-4">Item Categories</h2>
+      <div className="space-y-3">
+        {renderSection('Item Categories', 'items', categories, isLoading, error ? 'Failed to load categories' : null)}
+        {renderSection('Vendor Types', 'vendors', vendorTypes, isLoadingVendorTypes, vendorTypeError)}
       </div>
     </Card>
   );

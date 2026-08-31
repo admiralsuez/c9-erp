@@ -82,7 +82,7 @@ export const NotificationsPage: React.FC = () => {
                   {n.type === 'approval' && !n.is_approved && (
                     <Button
                       variant="secondary"
-                      size="xs"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         approve.mutate(n.id);

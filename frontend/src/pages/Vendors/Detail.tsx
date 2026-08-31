@@ -4,6 +4,7 @@ import { Card, Button, ListLoadingState } from '../../components/ui';
 import { cardErrorPadded, formLabel } from '../../styles/classNames';
 import { ArrowLeft, Edit2, Trash2, Loader, AlertCircle, Plus, MapPin } from 'lucide-react';
 import { useVendor, useUpdateVendor, useDeleteVendor, useCreateVendor } from '../../hooks/useVendors';
+import { vendorApi } from '../../api/vendors';
 import type { VendorCreateRequest } from '../../api/vendors';
 import { formatDate } from '../../utils/format';
 
@@ -21,7 +22,7 @@ export const VendorDetailPage: React.FC = () => {
   // Form state for editing
   const [formData, setFormData] = useState<VendorCreateRequest>({
     name: '',
-    vendor_type: '',
+    vendor_type_id: null,
     contact_person: '',
     phone: '',
     email: '',
@@ -31,6 +32,7 @@ export const VendorDetailPage: React.FC = () => {
     gst: '',
     notes: '',
   });
+  const [vendorTypes, setVendorTypes] = useState<any[]>([]);
 
   const { data: vendor, isLoading, error } = useVendor(vendorId);
   const { mutate: updateVendor, isPending: isUpdating } = useUpdateVendor();
@@ -42,7 +44,7 @@ export const VendorDetailPage: React.FC = () => {
     if (vendor) {
       setFormData({
         name: vendor.name,
-        vendor_type: vendor.vendor_type,
+        vendor_type_id: vendor.vendor_type_id || null,
         contact_person: vendor.contact_person || '',
         phone: vendor.phone || '',
         email: vendor.email || '',
@@ -55,6 +57,19 @@ export const VendorDetailPage: React.FC = () => {
     }
   }, [vendor]);
 
+  // Load vendor types on mount
+  React.useEffect(() => {
+    const loadTypes = async () => {
+      try {
+        const types = await vendorApi.types.list();
+        setVendorTypes(types);
+      } catch (err) {
+        console.error('Failed to load vendor types:', err);
+      }
+    };
+    loadTypes();
+  }, []);
+
   const addAddress = () => {
     if (!vendorId) return;
     if (!newAddress.address.trim()) {
@@ -64,7 +79,7 @@ export const VendorDetailPage: React.FC = () => {
     createChild(
       {
         name: `${formData.name} - Address ${(vendor?.children?.length ?? 0) + 2}`,
-        vendor_type: formData.vendor_type,
+        vendor_type_id: formData.vendor_type_id,
         address: newAddress.address,
         city: newAddress.city,
         state: newAddress.state,
@@ -105,7 +120,7 @@ export const VendorDetailPage: React.FC = () => {
     e.preventDefault();
     setFormError('');
 
-    if (!formData.name || !formData.vendor_type) {
+    if (!formData.name || !formData.vendor_type_id) {
       setFormError('Name and Vendor Type are required');
       return;
     }
@@ -400,15 +415,24 @@ export const VendorDetailPage: React.FC = () => {
                 <label className={formLabel}>
                   Vendor Type *
                 </label>
-                <input
-                  type="text"
-                  value={formData.vendor_type}
+                <select
+                  value={formData.vendor_type_id ?? ''}
                   onChange={(e) =>
-                    setFormData({ ...formData, vendor_type: e.target.value })
+                    setFormData({
+                      ...formData,
+                      vendor_type_id: e.target.value ? parseInt(e.target.value) : null,
+                    })
                   }
-                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                   disabled={isUpdating}
-                />
+                >
+                  <option value="">Select a vendor type...</option>
+                  {vendorTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 

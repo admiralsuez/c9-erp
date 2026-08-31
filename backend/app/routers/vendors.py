@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, asc, desc, func
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_admin, require_permission
 from app.models import User, Vendor, VendorType
 from app.schemas import VendorCreate, VendorUpdate, VendorResponse, VendorSummaryResponse, VendorTypeResponse, VendorTypeCreate
-from app.schemas.imports import VendorImportRow, ImportResult, ImportError, get_vendor_template
+from app.schemas.imports import VendorImportRow, ImportResult, get_vendor_template
 from app.services.csv_importer import parse_csv_file, validate_and_parse_rows, validate_headers, get_required_headers
-from typing import List
+from typing import List, Optional
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
 
@@ -43,12 +43,15 @@ def find_similar_vendors(name: str, db: Session, exclude_id: int = None) -> List
 @router.get("")
 def list_vendors(
     search: str = Query(None),
+    vendor_type: str = Query(None),
+    city: str = Query(None),
+    sort_by: str = Query(None, pattern="^(last_added|old_to_new|by_city)$"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List vendors with optional search - returns paginated response."""
+    """List vendors with search, type/city filter, and sorting - returns paginated response."""
     query = db.query(Vendor).filter(
         Vendor.deleted_at == None,
         Vendor.parent_id == None  # Child addresses not listed as standalone vendors
@@ -64,6 +67,20 @@ def list_vendors(
                 Vendor.phone.ilike(f"%{search}%")
             )
         )
+    
+    if vendor_type:
+        query = query.filter(Vendor.vendor_type == vendor_type)
+    
+    if city:
+        query = query.filter(Vendor.city.ilike(f"%{city}%"))
+    
+    # Apply sorting
+    if sort_by == "last_added":
+        query = query.order_by(desc(Vendor.created_at))
+    elif sort_by == "old_to_new":
+        query = query.order_by(asc(Vendor.created_at))
+    elif sort_by == "by_city":
+        query = query.order_by(asc(Vendor.city))
     
     total = query.count()
     skip = (page - 1) * size
@@ -111,10 +128,17 @@ def create_vendor(
                 detail=f"Similar vendor already exists: {', '.join(similar_names)}"
             )
     
+    # Resolve legacy vendor_type string from the FK when not provided
+    vendor_type_str = vendor_data.vendor_type
+    if not vendor_type_str and vendor_data.vendor_type_id:
+        vt = db.query(VendorType).filter(VendorType.id == vendor_data.vendor_type_id).first()
+        if vt:
+            vendor_type_str = vt.name
+
     vendor = Vendor(
         name=vendor_data.name,
         name_normalized=normalized_name,
-        vendor_type=vendor_data.vendor_type,
+        vendor_type=vendor_type_str,
         vendor_type_id=vendor_data.vendor_type_id,
         contact_person=vendor_data.contact_person,
         phone=vendor_data.phone,
@@ -182,39 +206,46 @@ def reassign_vendors_and_delete_type(
     if not vt:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vendor type not found")
     
-    vendors = db.query(Vendor).filter(
+    # Include soft-deleted vendors too — they still hold the FK and would
+    # block deletion with a constraint violation if left pointing at this type
+    active_vendors = db.query(Vendor).filter(
         Vendor.vendor_type_id == type_id,
         Vendor.deleted_at == None
     ).all()
-    
-    if len(vendors) == 0:
-        # No vendors using this type, just delete it
+    all_vendors = db.query(Vendor).filter(
+        Vendor.vendor_type_id == type_id
+    ).all()
+
+    if len(all_vendors) == 0:
+        # No vendors using this type at all, just delete it
         db.delete(vt)
         db.commit()
         return {"message": "Vendor type deleted successfully"}
-    
+
     if new_type_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot delete: {len(vendors)} vendor(s) use this type. Provide new_type_id to reassign them."
+            detail=f"Cannot delete: {len(active_vendors)} active vendor(s) use this type. Provide new_type_id to reassign them."
         )
-    
+
     # Verify new type exists
     new_type = db.query(VendorType).filter(VendorType.id == new_type_id).first()
     if not new_type:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="New vendor type not found")
-    
-    # Reassign all vendors
-    for vendor in vendors:
+
+    # Reassign ALL vendors (including soft-deleted) so the FK is released.
+    # Also update the legacy vendor_type string so the UI stays consistent.
+    for vendor in all_vendors:
         vendor.vendor_type_id = new_type_id
-    
+        vendor.vendor_type = new_type.name
+
     # Delete old type
     db.delete(vt)
     db.commit()
     
     return {
-        "message": f"Reassigned {len(vendors)} vendor(s) to {new_type.name} and deleted {vt.name}",
-        "reassigned_count": len(vendors),
+        "message": f"Reassigned {len(active_vendors)} vendor(s) to {new_type.name} and deleted {vt.name}",
+        "reassigned_count": len(active_vendors),
         "new_type": VendorTypeResponse.model_validate(new_type)
     }
 
@@ -224,9 +255,17 @@ def delete_vendor_type(type_id: int, db: Session = Depends(get_db), current_user
     vt = db.query(VendorType).filter(VendorType.id == type_id).first()
     if not vt:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vendor type not found")
-    vendors_using = db.query(Vendor).filter(Vendor.vendor_type_id == type_id).count()
+    # Only active vendors block deletion
+    vendors_using = db.query(Vendor).filter(
+        Vendor.vendor_type_id == type_id,
+        Vendor.deleted_at == None
+    ).count()
     if vendors_using > 0:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Cannot delete: {vendors_using} vendor(s) use this type")
+    # Clear FK on soft-deleted vendors so the delete doesn't violate the constraint
+    db.query(Vendor).filter(
+        Vendor.vendor_type_id == type_id
+    ).update({"vendor_type_id": None, "vendor_type": None}, synchronize_session=False)
     db.delete(vt)
     db.commit()
 
@@ -293,7 +332,13 @@ def update_vendor(
     for field, value in update_data.items():
         if value is not None:
             setattr(vendor, field, value)
-    
+
+    # Keep legacy vendor_type string in sync with the FK
+    if vendor_data.vendor_type_id is not None:
+        vt = db.query(VendorType).filter(VendorType.id == vendor_data.vendor_type_id).first()
+        if vt:
+            vendor.vendor_type = vt.name
+
     db.commit()
     db.refresh(vendor)
     return vendor

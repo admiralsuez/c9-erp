@@ -54,7 +54,10 @@ export const vendorApi = {
   list: async (
     page: number = 1,
     size: number = 20,
-    search?: string
+    search?: string,
+    vendorType?: string,
+    city?: string,
+    sortBy: string = 'last_added'
   ): Promise<PaginatedResponse<VendorResponse>> => {
     const params = new URLSearchParams();
     params.append('page', page.toString());
@@ -62,6 +65,13 @@ export const vendorApi = {
     if (search) {
       params.append('search', search);
     }
+    if (vendorType) {
+      params.append('vendor_type', vendorType);
+    }
+    if (city) {
+      params.append('city', city);
+    }
+    params.append('sort_by', sortBy);
     const response = await apiClient.get<PaginatedResponse<VendorResponse>>(
       `/vendors?${params.toString()}`
     );
@@ -91,6 +101,16 @@ export const vendorApi = {
 
   delete: async (vendorId: number): Promise<void> => {
     await apiClient.delete(`/vendors/${vendorId}`);
+  },
+
+  listTypes: async (): Promise<VendorType[]> => {
+    const response = await apiClient.get<VendorType[]>('/vendors/types');
+    return response.data;
+  },
+
+  createType: async (data: { name: string }): Promise<VendorType> => {
+    const response = await apiClient.post<VendorType>('/vendors/types', data);
+    return response.data;
   },
 
   types: {

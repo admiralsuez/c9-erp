@@ -32,7 +32,7 @@ def get_settings(
         )
     # Serialise to Pydantic so the cached copy is detached from the session
     # and safe to return after the request lifecycle ends.
-    return SettingsResponse.model_validate(settings).model_dump()
+    return SettingsResponse.model_validate(settings)
 
 
 @router.patch("", response_model=SettingsResponse)

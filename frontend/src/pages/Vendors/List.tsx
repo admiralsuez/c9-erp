@@ -1,21 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button, TextInput, ListLoadingState, ListEmptyState, StatusBadge } from '../../components/ui';
 import { cardErrorPadded } from '../../styles/classNames';
 import { Search, Plus, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { useVendors } from '../../hooks/useVendors';
+import { useVendorTypes } from '../../hooks/useVendors';
 
 const VENDORS_PER_PAGE = 20;
 
 export const VendorsListPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [vendorTypeFilter, setVendorTypeFilter] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
+  const [sortBy, setSortBy] = useState('last_added');
   const [currentPage, setCurrentPage] = useState(1);
+
+  const { data: vendorTypesData } = useVendorTypes();
+  const vendorTypes = vendorTypesData || [];
 
   const { data, isLoading, error } = useVendors(
     currentPage,
     VENDORS_PER_PAGE,
-    searchQuery || undefined
+    searchQuery || undefined,
+    vendorTypeFilter || undefined,
+    cityFilter || undefined,
+    sortBy
   );
 
   const items = data?.items ?? [];
@@ -60,15 +70,93 @@ export const VendorsListPage: React.FC = () => {
       )}
 
       <Card padding="lg">
-        <TextInput
-          icon={<Search className="w-4 h-4" />}
-          placeholder="Search vendors by name, email, or phone..."
-          value={searchQuery}
-          onChange={(e) => {
-            setSearchQuery(e.target.value);
-            setCurrentPage(1);
-          }}
-        />
+        <div className="space-y-4">
+          {/* Search input */}
+          <TextInput
+            icon={<Search className="w-4 h-4" />}
+            placeholder="Search vendors by name, email, or phone..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+          />
+
+          {/* Filters and Sort row */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            {/* Vendor Type Filter */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Vendor Type
+              </label>
+              <select
+                value={vendorTypeFilter}
+                onChange={(e) => {
+                  setVendorTypeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              >
+                <option value="">All Types</option>
+                {vendorTypes.map((type) => (
+                  <option key={type.id} value={type.name}>
+                    {type.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* City Filter */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                City
+              </label>
+              <TextInput
+                placeholder="Filter by city..."
+                value={cityFilter}
+                onChange={(e) => {
+                  setCityFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
+
+            {/* Sort */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Sort By
+              </label>
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              >
+                <option value="last_added">Recently Added</option>
+                <option value="old_to_new">Oldest First</option>
+                <option value="by_city">By City</option>
+              </select>
+            </div>
+
+            {/* Clear Filters Button */}
+            <div className="flex items-end">
+              <Button
+                onClick={() => {
+                  setSearchQuery('');
+                  setVendorTypeFilter('');
+                  setCityFilter('');
+                  setSortBy('last_added');
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-sm"
+              >
+                Clear Filters
+              </Button>
+            </div>
+          </div>
+        </div>
       </Card>
 
       {/* Vendors List */}

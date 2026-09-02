@@ -972,7 +972,7 @@ export const AuditLogSection: React.FC = () => {
 
 // ============ CHANGELOG SECTION ============
 export const ChangelogSection: React.FC = () => {
-  const { data, isLoading, error } = useAuditLogs(1, 200);
+  const { data, isLoading, error } = useAuditLogs(1, 100);
 
   const grouped = React.useMemo(() => {
     const map: Record<string, any[]> = {};

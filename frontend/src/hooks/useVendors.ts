@@ -2,10 +2,24 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { vendorApi } from '../api/vendors';
 
-export const useVendors = (page: number = 1, size: number = 20, search?: string) => {
+export const useVendors = (
+  page: number = 1,
+  size: number = 20,
+  search?: string,
+  vendorType?: string,
+  city?: string,
+  sortBy: string = 'last_added'
+) => {
   return useQuery({
-    queryKey: ['vendors', page, size, search],
-    queryFn: () => vendorApi.list(page, size, search),
+    queryKey: ['vendors', page, size, search, vendorType, city, sortBy],
+    queryFn: () => vendorApi.list(page, size, search, vendorType, city, sortBy),
+  });
+};
+
+export const useVendorTypes = () => {
+  return useQuery({
+    queryKey: ['vendor-types'],
+    queryFn: () => vendorApi.listTypes(),
   });
 };
 
@@ -14,6 +28,19 @@ export const useVendor = (vendorId: number | null) => {
     queryKey: ['vendor', vendorId],
     queryFn: () => vendorApi.get(vendorId!),
     enabled: !!vendorId,
+  });
+};
+
+export const useCreateVendorType = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { name: string }) => vendorApi.createType(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendor-types'] });
+      toast.success('Vendor type created successfully');
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to create vendor type'),
   });
 };
 

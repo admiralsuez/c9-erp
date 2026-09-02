@@ -32,7 +32,7 @@ RUN npm install -g serve
 COPY --from=builder /app/dist ./dist
 
 # Create non-root user, give it ownership of dist
-RUN addgroup -g 1000 appuser && adduser -u 1000 -G appuser -D appuser \
+RUN addgroup -g 1001 appuser && adduser -u 1001 -G appuser -D appuser \
     && chown -R appuser:appuser /app
 USER appuser
 

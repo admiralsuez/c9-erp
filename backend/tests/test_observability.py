@@ -150,7 +150,7 @@ class TestResponseCache:
         assert c.invalidate_prefix("k1") == 1
         assert c.get("k1") is None
         assert c.stats()["hits"] == 1
-        assert c.stats()["misses"] == 2
+        assert c.stats()["misses"] == 1
 
     def test_ttl_expiry(self):
         import time

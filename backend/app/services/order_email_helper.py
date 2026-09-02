@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
 from app.models import Order, EmailTemplate, EmailLog, Document
-from app.services.email_service import get_email_service
+from app.services.email_service import get_email_service, safe_send_templated_email
 from app.services.storage import get_storage_backend
 from app.core.database import SessionLocal
 
@@ -85,12 +85,12 @@ def send_order_email(
             attachments = _get_requisition_attachments(db, order)
         
         # Send email
-        email_service = get_email_service()
-        success = email_service.send_templated_email(
+        success = safe_send_templated_email(
             to_email=recipient_email,
             template=template,
             context=email_context,
-            attachments=attachments
+            attachments=attachments,
+            context_label=f"order-{order.id}",
         )
         
         # Log email in database

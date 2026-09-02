@@ -273,3 +273,53 @@ def set_email_backend(backend: EmailBackend):
     """Set just the backend (for testing)."""
     global _email_service
     _email_service = EmailService(backend=backend)
+
+
+def safe_send_templated_email(
+    to_email: str,
+    template: Any,
+    context: Dict[str, Any],
+    attachments: Optional[List[Dict]] = None,
+    *,
+    context_label: str = "email",
+) -> bool:
+    """Send a templated email with consistent logging and never-raise semantics.
+
+    This is the preferred entry point from routers. It:
+
+    * pulls the configured email service,
+    * renders the template,
+    * delegates to the backend,
+    * logs the outcome (success or failure with the recipient + context label),
+    * never raises — callers can always assume a boolean back.
+
+    Args:
+        to_email: Recipient address.
+        template: Either an ``EmailTemplate`` ORM object or a dict with
+            ``subject``/``body_html`` keys.
+        context: Dict of variables for Jinja2 rendering.
+        attachments: Optional list of file attachments.
+        context_label: Short tag for log lines (e.g. "password-reset",
+            "order-approved") so failures are traceable.
+
+    Returns:
+        ``True`` on success, ``False`` on any failure.
+    """
+    try:
+        service = get_email_service()
+        ok = service.send_templated_email(
+            to_email=to_email,
+            template=template,
+            context=context,
+            attachments=attachments,
+        )
+        if ok:
+            logger.info("Email sent [%s] to %s", context_label, to_email)
+        else:
+            logger.error("Email send returned False [%s] to %s", context_label, to_email)
+        return ok
+    except Exception:
+        logger.exception(
+            "Unhandled error sending email [%s] to %s", context_label, to_email
+        )
+        return False

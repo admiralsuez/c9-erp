@@ -29,6 +29,7 @@ from app.schemas import (
     InventoryItemImageResponse,
     InventoryItemResponse,
     InventoryItemUpdate,
+    PaginatedResponse,
 )
 from app.services.audit_service import log_audit
 from app.services.query_optimizer import optimize_inventory_item_query, optimize_inventory_category_query
@@ -181,52 +182,39 @@ def list_items(
     try:
         total = query.count()
     except Exception as e:
-        logger.error(f"Error counting inventory items: {e}")
-        return {
-            "items": [],
-            "total": 0,
-            "page": page,
-            "size": size,
-            "pages": 0,
-            "error": "Failed to count items"
-        }
-    
+        logger.exception("Failed to count inventory items")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to count inventory items at this time"
+        )
+
     skip = (page - 1) * size
     try:
         items = optimize_inventory_item_query(query).offset(skip).limit(size).all()
     except Exception as e:
-        logger.error(f"Error fetching inventory items: {e}")
-        return {
-            "items": [],
-            "total": total,
-            "page": page,
-            "size": size,
-            "pages": 0,
-            "error": "Failed to fetch items"
-        }
-    
+        logger.exception("Failed to fetch inventory items")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to fetch inventory items at this time"
+        )
+
     total_pages = (total + size - 1) // size
-    
-    # Serialize items safely
+
+    # Serialize items — skip individual failures but don't mask DB errors
     items_data = []
     for item in items:
         try:
             items_data.append(InventoryItemResponse.model_validate(item))
         except Exception as e:
             logger.error(f"Error validating item {item.id} ({item.sku}): {e}")
-            # Log the full traceback to see what's wrong
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            # Skip items that fail validation
             continue
-    
-    return {
-        "items": items_data,
-        "total": total,
-        "page": page,
-        "size": size,
-        "pages": total_pages
-    }
+
+    return PaginatedResponse[InventoryItemResponse].build(
+        items=items_data,
+        total=total,
+        page=page,
+        size=size,
+    )
 @router.get("/drafts")
 def list_drafts(
     page: int = Query(1, ge=1),
@@ -240,7 +228,7 @@ def list_drafts(
         InventoryItem.is_draft == True,
         InventoryItem.deleted_at == None
     )
-    
+
     # Search by name, SKU, or barcode
     if search:
         query = query.filter(
@@ -250,12 +238,12 @@ def list_drafts(
                 InventoryItem.barcode.ilike(f"%{search}%")
             )
         )
-    
+
     total = query.count()
     skip = (page - 1) * size
     items = optimize_inventory_item_query(query).offset(skip).limit(size).all()
     total_pages = (total + size - 1) // size
-    
+
     items_data = []
     for item in items:
         try:
@@ -263,14 +251,13 @@ def list_drafts(
         except Exception as e:
             logger.error(f"Error validating draft item {item.id}: {e}")
             continue
-    
-    return {
-        "items": items_data,
-        "total": total,
-        "page": page,
-        "size": size,
-        "pages": total_pages
-    }
+
+    return PaginatedResponse[InventoryItemResponse].build(
+        items=items_data,
+        total=total,
+        page=page,
+        size=size,
+    )
 @router.post("/items/{item_id}/publish", response_model=InventoryItemResponse)
 def publish_draft(
     item_id: int,
@@ -1179,6 +1166,7 @@ def import_items(
                         continue
                 
                 # Create item
+                initial_qty = Decimal(str(item_data.current_quantity or 0))
                 item = InventoryItem(
                     name=item_data.name,
                     sku=item_data.sku,
@@ -1186,12 +1174,29 @@ def import_items(
                     barcode=item_data.barcode,
                     category_id=item_data.category_id,
                     item_type=item_data.item_type,
-                    current_quantity=Decimal(str(item_data.current_quantity)),
+                    current_quantity=initial_qty,
                     minimum_quantity=Decimal(str(item_data.minimum_quantity)),
                     description=item_data.description,
                     parent_id=item_data.parent_id,
                 )
                 db.add(item)
+                db.flush()  # assign item.id without committing
+
+                # Record opening-balance transaction so the ledger reflects the import.
+                if initial_qty > 0:
+                    opening_txn = InventoryTransaction(
+                        item_id=item.id,
+                        transaction_type="opening_balance",
+                        previous_quantity=Decimal("0"),
+                        change_quantity=initial_qty,
+                        new_quantity=initial_qty,
+                        reference_type="csv_import",
+                        reference_id=None,
+                        reason="Opening balance via CSV import",
+                        created_by=current_user.id,
+                    )
+                    db.add(opening_txn)
+
                 created_count += 1
             
             db.commit()

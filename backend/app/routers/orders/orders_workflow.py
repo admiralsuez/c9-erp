@@ -35,6 +35,7 @@ from app.services.order_email_helper import (
     send_order_dispatched_email,
 )
 from app.services.pdf_generator import PDFGenerator
+from app.services.pdf_helpers import build_pdf_items, get_branding_dict
 from app.services.serial_number_service import serial_number_service
 from app.services.storage import get_storage_backend
 
@@ -53,7 +54,7 @@ logger = logging.getLogger(__name__)
 def approve_order(
     order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("orders.approve"))
 ):
     """Signed -> Approved (with approval matrix check and reservation)."""
     order = db.query(Order).filter(
@@ -96,7 +97,7 @@ def approve_with_signature(
     order_id: int,
     signature_data: str = Query(default=""),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("orders.approve"))
 ):
     signature_data = signature_data or ""
     """Approve order with e-signature. Auto-generates signed PDF."""
@@ -122,23 +123,16 @@ def approve_with_signature(
     
     # Generate signed PDF
     try:
-        company_settings = db.query(Settings).first()
+        branding = get_branding_dict(db)
         settings_dict = {
-            "company_name": company_settings.company_name if company_settings else "Cloud9",
-            "company_address": company_settings.company_address if company_settings else "",
-            "header_text": company_settings.pdf_header_text if company_settings else "",
-            "footer_text": company_settings.pdf_footer_text if company_settings else ""
+            "company_name": branding.get("company_name") or "Cloud9",
+            "company_address": branding.get("company_address") or "",
+            "header_text": branding.get("pdf_header_text") or "",
+            "footer_text": branding.get("pdf_footer_text") or "",
         }
-        
-        pdf_items = []
-        for order_item in order.items:
-            pdf_items.append({
-                "sku": order_item.item.sku,
-                "name": order_item.item.name,
-                "quantity": str(order_item.quantity_ordered),
-                "description": order_item.item.description or ""
-            })
-        
+
+        pdf_items = build_pdf_items(order.items)
+
         creator = db.query(User).filter(User.id == order.created_by).first()
         
         pdf_gen = PDFGenerator(
@@ -296,7 +290,7 @@ def dispatch_order(
 def mark_delivered(
     order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("orders.deliver"))
 ):
     """Dispatched -> Delivered."""
     order = db.query(Order).filter(
@@ -334,7 +328,7 @@ def mark_delivered(
 def close_order(
     order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("orders.close"))
 ):
     """Delivered -> Closed."""
     order = db.query(Order).filter(
@@ -364,7 +358,7 @@ def close_order(
 def cancel_order(
     order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("orders.cancel"))
 ):
     """Any non-terminal -> Cancelled (releases reservation)."""
     order = db.query(Order).filter(
@@ -387,14 +381,10 @@ def cancel_order(
     # Release reservation (stock is reserved from creation onwards)
     if any(oi.quantity_reserved > 0 for oi in order.items):
         release_reservation(db, order)
-    
-    # Release serials
-    assigned_serials = db.query(SerialNumber).filter(
-        SerialNumber.assigned_to_order_id == order.id
-    ).all()
-    for s in assigned_serials:
-        serial_number_service.unassign_from_order(db, s.id)
-    
+
+    # Release serials in a single bulk update (faster than per-row commit)
+    serial_number_service.bulk_unassign_from_order(db, order.id)
+
     order.status = OrderStatus.CANCELLED
     add_timeline_entry(db, order, "cancelled", current_user)
     log_audit(db, user_id=current_user.id, action="order.cancelled", entity_type="order", entity_id=order.id)
@@ -447,7 +437,7 @@ def return_order(
     order_id: int,
     body: ReturnOrderRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("orders.return"))
 ):
     """Return items from a closed order with per-item quantities, damaged tracking, and photos."""
     order = db.query(Order).filter(

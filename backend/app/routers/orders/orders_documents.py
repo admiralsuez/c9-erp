@@ -11,6 +11,7 @@ from app.schemas import OrderResponse
 from app.services.audit_service import log_audit
 from app.services.order_email_helper import send_requisition_created_email
 from app.services.pdf_generator import PDFGenerator
+from app.services.pdf_helpers import build_pdf_items, get_branding_dict
 from app.services.storage import get_storage_backend
 
 from .orders_common import OrderStatus, add_timeline_entry
@@ -77,24 +78,17 @@ def submit_requisition(
     # Generate requisition PDF
     try:
         # Get settings for branding
-        company_settings = db.query(Settings).first()
+        branding = get_branding_dict(db)
         settings_dict = {
-            "company_name": company_settings.company_name if company_settings else "Cloud9",
-            "company_address": company_settings.company_address if company_settings else "",
-            "header_text": company_settings.pdf_header_text if company_settings else "",
-            "footer_text": company_settings.pdf_footer_text if company_settings else ""
+            "company_name": branding.get("company_name") or "Cloud9",
+            "company_address": branding.get("company_address") or "",
+            "header_text": branding.get("pdf_header_text") or "",
+            "footer_text": branding.get("pdf_footer_text") or "",
         }
-        
+
         # Prepare items for PDF
-        pdf_items = []
-        for order_item in order.items:
-            pdf_items.append({
-                "sku": order_item.item.sku,
-                "name": order_item.item.name,
-                "quantity": str(order_item.quantity_ordered),
-                "description": order_item.item.description or ""
-            })
-        
+        pdf_items = build_pdf_items(order.items)
+
         # Generate PDF
         pdf_generator = PDFGenerator(
             company_name=settings_dict.get("company_name", "Cloud9")
@@ -213,7 +207,7 @@ def upload_signed_requisition(
         
         if len(content) > 1 * 1024 * 1024:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail="File too large (max 1MB)"
             )
 

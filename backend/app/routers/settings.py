@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.core.database import get_db, engine
 from app.core.auth import get_current_user, require_admin
+from app.core.response_cache import cached, invalidate as invalidate_cache
 from app.models import User, Settings as SettingsModel, InventoryItem, Order, AuditLog
 from app.schemas import SettingsResponse, SettingsUpdate
 from datetime import datetime, timezone, timedelta
@@ -17,18 +18,21 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 @router.get("", response_model=SettingsResponse)
+@cached("settings:singleton", ttl_seconds=120)
 def get_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get company settings."""
+    """Get company settings. Cached for 2 minutes — invalidated on update."""
     settings = db.query(SettingsModel).first()
     if not settings:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Settings not found. Run seed data first."
         )
-    return settings
+    # Serialise to Pydantic so the cached copy is detached from the session
+    # and safe to return after the request lifecycle ends.
+    return SettingsResponse.model_validate(settings).model_dump()
 
 
 @router.patch("", response_model=SettingsResponse)
@@ -60,9 +64,13 @@ def update_settings(
     
     for field, value in update_data.items():
         setattr(settings, field, value)
-    
+
     db.commit()
     db.refresh(settings)
+
+    # Drop the cached settings so the next read picks up the new values.
+    invalidate_cache("settings:")
+
     return settings
 
 
@@ -106,6 +114,9 @@ def upload_logo(
     settings.company_logo_url = f"/static/uploads/{filename}"
     db.commit()
     db.refresh(settings)
+
+    invalidate_cache("settings:")
+
     return settings
 
 

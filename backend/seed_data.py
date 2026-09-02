@@ -37,15 +37,25 @@ def seed_roles_and_permissions():
     # Define permissions
     permissions_list = [
         ("dashboard.view", "View analytics dashboard"),
+        ("vendors.create", "Create vendors"),
+        ("vendors.edit", "Edit vendors"),
+        ("vendors.delete", "Delete vendors"),
         ("inventory.create", "Create inventory items and categories"),
         ("inventory.edit", "Edit and adjust inventory"),
         ("inventory.dispatch", "Dispatch and restock inventory"),
+        ("inventory.restock", "Restock inventory"),
         ("orders.create", "Create orders"),
         ("orders.approve", "Approve orders"),
+        ("orders.cancel", "Cancel orders"),
+        ("orders.dispatch", "Dispatch orders"),
+        ("orders.deliver", "Mark orders delivered"),
+        ("orders.close", "Close orders"),
+        ("orders.return", "Process order returns"),
+        ("orders.manage", "Manage order details (return reasons, etc.)"),
         ("users.manage", "Manage users"),
         ("reports.view", "View reports"),
     ]
-    
+
     permissions = {}
     for code, description in permissions_list:
         perm = db.query(Permission).filter(Permission.code == code).first()
@@ -53,14 +63,14 @@ def seed_roles_and_permissions():
             perm = Permission(code=code, description=description)
             db.add(perm)
         permissions[code] = perm
-    
+
     db.commit()
-    
+
     # Define roles
     roles_list = [
-        ("Admin", "Full system access", ["dashboard.view", "inventory.create", "inventory.edit", "inventory.dispatch", "orders.create", "orders.approve", "users.manage", "reports.view"]),
-        ("Manager", "Manage inventory and orders (no user management)", ["dashboard.view", "inventory.create", "inventory.edit", "inventory.dispatch", "orders.create", "orders.approve", "reports.view"]),
-        ("Warehouse User", "Restock and dispatch inventory", ["inventory.create", "inventory.dispatch"]),
+        ("Admin", "Full system access", ["dashboard.view", "vendors.create", "vendors.edit", "vendors.delete", "inventory.create", "inventory.edit", "inventory.dispatch", "inventory.restock", "orders.create", "orders.approve", "orders.cancel", "orders.dispatch", "orders.deliver", "orders.close", "orders.return", "orders.manage", "users.manage", "reports.view"]),
+        ("Manager", "Manage inventory and orders (no user management)", ["dashboard.view", "vendors.create", "vendors.edit", "inventory.create", "inventory.edit", "inventory.dispatch", "inventory.restock", "orders.create", "orders.approve", "orders.cancel", "orders.dispatch", "orders.deliver", "orders.close", "orders.return", "orders.manage", "reports.view"]),
+        ("Warehouse User", "Restock and dispatch inventory", ["inventory.create", "inventory.dispatch", "inventory.restock"]),
         ("Viewer", "Read-only access", []),
     ]
     

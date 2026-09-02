@@ -8,8 +8,11 @@ import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+
 from app.models import SerialNumber, InventoryItem
+from app.services.validators import require_found
 
 logger = logging.getLogger(__name__)
 
@@ -247,7 +250,39 @@ class SerialNumberService:
             db.rollback()
             logger.error(f"Failed to unassign serial from order: {str(e)}")
             raise Exception(f"Failed to unassign serial from order: {str(e)}")
-    
+
+    @staticmethod
+    def bulk_unassign_from_order(
+        db: Session,
+        order_id: int,
+    ) -> int:
+        """Unassign every serial tied to ``order_id`` in a single UPDATE.
+
+        Returns the number of rows released. Useful on cancellation /
+        return flows where dozens of serials are tied to one order —
+        replaces the N-commit ``for s in serials: unassign_from_order(...)``
+        pattern with one atomic statement.
+
+        Args:
+            db: Active SQLAlchemy session.
+            order_id: Primary key of the order whose serials should be freed.
+
+        Returns:
+            The number of serials whose ``assigned_to_order_id`` was cleared.
+        """
+        now = datetime.now()
+        result = db.query(SerialNumber).filter(
+            SerialNumber.assigned_to_order_id == order_id
+        ).update(
+            {"assigned_to_order_id": None, "updated_at": now},
+            synchronize_session=False,
+        )
+        if result:
+            logger.info(
+                "Bulk-unassigned %d serials from order %s", result, order_id
+            )
+        return result
+
     @staticmethod
     def update_condition(
         db: Session,
@@ -517,6 +552,59 @@ class SerialNumberService:
             db.rollback()
             logger.error(f"Failed to import serials: {str(e)}")
             raise Exception(f"Failed to import serials: {str(e)}")
+
+
+def load_serial_or_raise(
+    db: Session,
+    serial_id: int,
+    *,
+    item_id: Optional[int] = None,
+    assigned_to_order_id: Optional[int] = None,
+    extra_filters: Optional[List[Any]] = None,
+) -> SerialNumber:
+    """Load a ``SerialNumber`` by id, raising 404 when not found.
+
+    Consolidates the recurring pattern of:
+
+        serial = db.query(SerialNumber).filter(...).first()
+        if not serial:
+            raise HTTPException(404, "Serial number not found")
+
+    Args:
+        db: Active SQLAlchemy session.
+        serial_id: Primary key of the serial.
+        item_id: When given, the lookup also requires ``item_id`` to match
+            (useful for nested item-scoped routes).
+        assigned_to_order_id: When given, the lookup also requires the
+            serial to be currently assigned to that order (or unassigned
+            when set to a sentinel — pass ``-1`` for the "unassigned" check).
+        extra_filters: Optional list of additional SQLAlchemy filter expressions
+            to AND with the lookup.
+
+    Returns:
+        The matched ``SerialNumber``.
+
+    Raises:
+        HTTPException 404: when no row matches.
+    """
+    query = db.query(SerialNumber).filter(SerialNumber.id == serial_id)
+
+    if item_id is not None:
+        query = query.filter(SerialNumber.item_id == item_id)
+
+    if assigned_to_order_id is not None:
+        if assigned_to_order_id == -1:
+            query = query.filter(SerialNumber.assigned_to_order_id == None)
+        else:
+            query = query.filter(SerialNumber.assigned_to_order_id == assigned_to_order_id)
+
+    if extra_filters:
+        for f in extra_filters:
+            query = query.filter(f)
+
+    serial = query.first()
+    require_found(serial, name="Serial number", id_value=serial_id)
+    return serial
 
 
 # Global instance

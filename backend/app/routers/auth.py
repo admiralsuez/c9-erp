@@ -11,8 +11,8 @@ from app.models import User, RefreshToken
 from app.schemas import PasswordResetRequest, PasswordResetConfirm, PasswordResetResponse
 from app.services.audit_service import log_audit
 from app.schemas import LoginRequest, TokenResponse, RefreshTokenRequest, UserResponse
-from app.services.email_service import get_email_service
 from app.services.email_templates import DEFAULT_EMAIL_TEMPLATES
+from app.core.background_tasks import enqueue_email
 from app.core.config import settings
 from app.services.rate_limiter import rate_limiter, RateLimitExceeded
 import hashlib
@@ -215,30 +215,29 @@ def request_password_reset(
     
     # Create reset token
     reset_token = create_password_reset_token(user.id, db)
-    
+
     # Build reset link (frontend will handle the reset)
     reset_link = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
-    
-    # Send email with reset link
-    email_service = get_email_service()
+
+    # Send email with reset link. The reset token is already persisted above, so
+    # delivery is fire-and-forget: queue it on the background worker pool and log
+    # the *request* (not the email outcome) for audit — the worker logs its own
+    # success/failure via ``safe_send_templated_email``.
     template = DEFAULT_EMAIL_TEMPLATES["password_reset"]
-    
-    success = email_service.send_templated_email(
+    enqueue_email(
         to_email=user.email,
         template=template,
         context={
             "user_name": user.full_name or user.email.split('@')[0],
             "reset_link": reset_link
-        }
+        },
+        context_label="password-reset",
     )
-    
-    if success:
-        logger.info("PASSWORD RESET email sent to %s from %s", user.email, ip)
-        log_audit(db, user_id=user.id, action="password_reset_requested", 
-                  entity_type="user", entity_id=user.id, ip_address=ip)
-    else:
-        logger.error("PASSWORD RESET email failed for %s from %s", user.email, ip)
-    
+
+    logger.info("PASSWORD RESET email queued for %s from %s", user.email, ip)
+    log_audit(db, user_id=user.id, action="password_reset_requested",
+              entity_type="user", entity_id=user.id, ip_address=ip)
+
     return {"message": "If email exists, a password reset link will be sent"}
 
 

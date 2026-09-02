@@ -4,6 +4,7 @@ from app.core.database import get_db
 from app.core.auth import get_current_user, require_admin, require_permission
 from app.models import User, Order, InventoryItem, Vendor
 from app.services.analytics_service import get_analytics_service
+from app.core.response_cache import cached
 from sqlalchemy import and_
 import csv
 from io import StringIO
@@ -13,6 +14,7 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
 @router.get("/dashboard/overview")
+@cached("analytics:dashboard:overview", ttl_seconds=30)
 def get_dashboard_overview(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("dashboard.view"))
@@ -20,6 +22,10 @@ def get_dashboard_overview(
     """
     Get complete dashboard overview with all metrics.
     Requires dashboard.view permission (Admin and Manager roles).
+
+    Cached for 30s in-process — the handler builds fresh plain-dict payloads
+    (no ORM references), so caching the result is safe; per-request staleness
+    at most 30s is acceptable for dashboard aggregates.
     """
     analytics = get_analytics_service(db)
     return analytics.get_dashboard_overview()
@@ -202,36 +208,41 @@ def generate_vendors_report_csv(
 ):
     """Generate vendor performance report as CSV."""
     vendors = db.query(Vendor).filter(Vendor.deleted_at == None).all()
-    analytics = get_analytics_service(db)
-    
+
+    # Batch-fetch order counts in a single query to avoid N+1
+    vendor_ids = [v.id for v in vendors]
+    order_counts = dict(
+        db.query(Order.vendor_id, func.count(Order.id))
+        .filter(Order.vendor_id.in_(vendor_ids))
+        .group_by(Order.vendor_id)
+        .all()
+    ) if vendor_ids else {}
+
     # Generate CSV
     output = StringIO()
     writer = csv.writer(output)
-    
+
     # Headers
     writer.writerow([
         "Vendor Name",
         "Contact Person",
         "Email",
         "Orders Count",
-        "On-Time Delivery %",
         "Status"
     ])
-    
+
     # Rows
     for vendor in vendors:
-        perf = analytics.get_vendor_delivery_performance(vendor.id)
         writer.writerow([
             vendor.name,
             vendor.contact_person or "",
             vendor.email or "",
-            len(vendor.__dict__.get("orders", [])),  # Simplified count
-            perf.get("on_time_percentage", 0),
+            order_counts.get(vendor.id, 0),
             "Active" if vendor.is_active else "Inactive"
         ])
-    
+
     csv_content = output.getvalue()
-    
+
     return {
         "filename": f"vendors_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
         "content": csv_content,

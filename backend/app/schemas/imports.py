@@ -2,7 +2,7 @@
 Import schemas for bulk CSV imports of vendors, items, and orders.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import List, Optional
 from datetime import datetime
 
@@ -116,8 +116,8 @@ class ImportResult(BaseModel):
     errors: List[ImportError] = []
     message: str
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "success": True,
                 "total_rows": 100,
@@ -133,6 +133,7 @@ class ImportResult(BaseModel):
                 "message": "Imported 98 vendors successfully. 2 rows had errors."
             }
         }
+    )
 
 
 # ============ TEMPLATES ============

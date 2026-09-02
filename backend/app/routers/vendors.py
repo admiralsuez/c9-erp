@@ -4,9 +4,10 @@ from sqlalchemy import or_, asc, desc, func
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_admin, require_permission
 from app.models import User, Vendor, VendorType
-from app.schemas import VendorCreate, VendorUpdate, VendorResponse, VendorSummaryResponse, VendorTypeResponse, VendorTypeCreate
+from app.schemas import VendorCreate, VendorUpdate, VendorResponse, VendorSummaryResponse, VendorTypeResponse, VendorTypeCreate, PaginatedResponse
 from app.schemas.imports import VendorImportRow, ImportResult, get_vendor_template
 from app.services.csv_importer import parse_csv_file, validate_and_parse_rows, validate_headers, get_required_headers
+from app.core.response_cache import cached, invalidate as invalidate_cache
 from typing import List, Optional
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
@@ -85,22 +86,20 @@ def list_vendors(
     total = query.count()
     skip = (page - 1) * size
     vendors = query.offset(skip).limit(size).all()
-    pages = (total + size - 1) // size if total > 0 else 1
-    
-    return {
-        "items": [VendorResponse.model_validate(v) for v in vendors],
-        "total": total,
-        "page": page,
-        "size": size,
-        "pages": pages
-    }
+
+    return PaginatedResponse[VendorResponse].build(
+        items=[VendorResponse.model_validate(v) for v in vendors],
+        total=total,
+        page=page,
+        size=size,
+    )
 
 
 @router.post("", response_model=VendorResponse, status_code=status.HTTP_201_CREATED)
 def create_vendor(
     vendor_data: VendorCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("vendors.create"))
 ):
     """Create a new vendor with duplicate detection."""
     normalized_name = normalize_vendor_name(vendor_data.name)
@@ -159,12 +158,16 @@ def create_vendor(
 
 # ============ VENDOR TYPES ============
 @router.get("/types", response_model=List[VendorTypeResponse])
+@cached("vendors:types", ttl_seconds=120)
 def list_vendor_types(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(VendorType).order_by(VendorType.name).all()
+    vts = db.query(VendorType).order_by(VendorType.name).all()
+    # Serialize so the cached value is detached from the session and safe to
+    # return after the request lifecycle ends.
+    return [VendorTypeResponse.model_validate(vt).model_dump() for vt in vts]
 
 
 @router.post("/types", response_model=VendorTypeResponse, status_code=status.HTTP_201_CREATED)
-def create_vendor_type(body: VendorTypeCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_vendor_type(body: VendorTypeCreate, db: Session = Depends(get_db), current_user: User = Depends(require_permission("vendors.create"))):
     existing = db.query(VendorType).filter(VendorType.name == body.name).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Vendor type already exists")
@@ -172,6 +175,7 @@ def create_vendor_type(body: VendorTypeCreate, db: Session = Depends(get_db), cu
     db.add(vt)
     db.commit()
     db.refresh(vt)
+    invalidate_cache("vendors:types")
     return vt
 
 
@@ -199,7 +203,7 @@ def reassign_vendors_and_delete_type(
     type_id: int,
     new_type_id: int = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("vendors.delete"))
 ):
     """Reassign all vendors to a new type and delete the old type."""
     vt = db.query(VendorType).filter(VendorType.id == type_id).first()
@@ -242,16 +246,25 @@ def reassign_vendors_and_delete_type(
     # Delete old type
     db.delete(vt)
     db.commit()
-    
+
+    invalidate_cache("vendors:types")
+
+    active_count = len(active_vendors)
+    total_count = len(all_vendors)
     return {
-        "message": f"Reassigned {len(active_vendors)} vendor(s) to {new_type.name} and deleted {vt.name}",
-        "reassigned_count": len(active_vendors),
+        "message": (
+            f"Reassigned {total_count} vendor(s) "
+            f"({active_count} active, {total_count - active_count} archived) "
+            f"to {new_type.name} and deleted {vt.name}"
+        ),
+        "reassigned_count": total_count,
+        "active_reassigned_count": active_count,
         "new_type": VendorTypeResponse.model_validate(new_type)
     }
 
 
 @router.delete("/types/{type_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_vendor_type(type_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_vendor_type(type_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_permission("vendors.delete"))):
     vt = db.query(VendorType).filter(VendorType.id == type_id).first()
     if not vt:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vendor type not found")
@@ -268,6 +281,7 @@ def delete_vendor_type(type_id: int, db: Session = Depends(get_db), current_user
     ).update({"vendor_type_id": None, "vendor_type": None}, synchronize_session=False)
     db.delete(vt)
     db.commit()
+    invalidate_cache("vendors:types")
 
 
 @router.get("/{vendor_id}", response_model=VendorResponse)
@@ -295,7 +309,7 @@ def update_vendor(
     vendor_id: int,
     vendor_data: VendorUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("vendors.edit"))
 ):
     """Update vendor."""
     vendor = db.query(Vendor).filter(
@@ -348,7 +362,7 @@ def update_vendor(
 def delete_vendor(
     vendor_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("vendors.delete"))
 ):
     """Soft delete vendor."""
     vendor = db.query(Vendor).filter(

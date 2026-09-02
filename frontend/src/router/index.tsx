@@ -1,32 +1,47 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React, { lazy, Suspense } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import { AppShell } from '../layouts/AppShell';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { LoginPage } from '../pages/Login';
-import { DashboardPage } from '../pages/Dashboard';
-import { InventoryListPage } from '../pages/Inventory/List';
-import { InventoryDetailPage } from '../pages/Inventory/Detail';
-import { InventoryFormPage } from '../pages/Inventory/Form';
-import { SettingsPageComplete } from '../pages/Settings/SettingsComplete';
-import { VendorsListPage } from '../pages/Vendors/List';
-import { VendorDetailPage } from '../pages/Vendors/Detail';
-import { VendorFormPage } from '../pages/Vendors/Form';
-import { OrdersListPage } from '../pages/Orders/List';
-import { OrderCreatePage } from '../pages/Orders/Create';
-import { OrderDetailPage } from '../pages/Orders/Detail';
-import { PastOrdersPage } from '../pages/Orders/PastOrders';
-import { NotificationsPage } from '../pages/Notifications/Index';
-import { ApprovalsPage } from '../pages/Approvals/Index';
-import { ReportsPage } from '../pages/Reports';
-import { WeeklyReportPage } from '../pages/Reports/Weekly';
-import { ImportsPage } from '../pages/Imports/Index';
-import { NotFoundPage } from '../pages/Stubs';
-import ForgotPassword from '../pages/Auth/ForgotPassword';
-import PasswordReset from '../pages/Auth/PasswordReset';
+
+// ============ Lazy-loaded routes ============
+// Each page is split into its own chunk so the initial bundle only pays for
+// Login / Forgot / Reset / Dashboard. Admin / Reports / Inventory detail / etc.
+// download on demand when the user navigates there.
+const LoginPage = lazy(() => import('../pages/Login').then((m) => ({ default: m.LoginPage })));
+const DashboardPage = lazy(() => import('../pages/Dashboard').then((m) => ({ default: m.DashboardPage })));
+const InventoryListPage = lazy(() => import('../pages/Inventory/List').then((m) => ({ default: m.InventoryListPage })));
+const InventoryDetailPage = lazy(() => import('../pages/Inventory/Detail').then((m) => ({ default: m.InventoryDetailPage })));
+const InventoryFormPage = lazy(() => import('../pages/Inventory/Form').then((m) => ({ default: m.InventoryFormPage })));
+const SettingsPageComplete = lazy(() => import('../pages/Settings/SettingsComplete').then((m) => ({ default: m.SettingsPageComplete })));
+const VendorsListPage = lazy(() => import('../pages/Vendors/List').then((m) => ({ default: m.VendorsListPage })));
+const VendorDetailPage = lazy(() => import('../pages/Vendors/Detail').then((m) => ({ default: m.VendorDetailPage })));
+const VendorFormPage = lazy(() => import('../pages/Vendors/Form').then((m) => ({ default: m.VendorFormPage })));
+const OrdersListPage = lazy(() => import('../pages/Orders/List').then((m) => ({ default: m.OrdersListPage })));
+const OrderCreatePage = lazy(() => import('../pages/Orders/Create').then((m) => ({ default: m.OrderCreatePage })));
+const OrderDetailPage = lazy(() => import('../pages/Orders/Detail').then((m) => ({ default: m.OrderDetailPage })));
+const PastOrdersPage = lazy(() => import('../pages/Orders/PastOrders').then((m) => ({ default: m.PastOrdersPage })));
+const NotificationsPage = lazy(() => import('../pages/Notifications/Index').then((m) => ({ default: m.NotificationsPage })));
+const ApprovalsPage = lazy(() => import('../pages/Approvals/Index').then((m) => ({ default: m.ApprovalsPage })));
+const ReportsPage = lazy(() => import('../pages/Reports').then((m) => ({ default: m.ReportsPage })));
+const WeeklyReportPage = lazy(() => import('../pages/Reports/Weekly').then((m) => ({ default: m.WeeklyReportPage })));
+const ImportsPage = lazy(() => import('../pages/Imports/Index').then((m) => ({ default: m.ImportsPage })));
+const NotFoundPage = lazy(() => import('../pages/Stubs').then((m) => ({ default: m.NotFoundPage })));
+const ForgotPassword = lazy(() => import('../pages/Auth/ForgotPassword').then((m) => ({ default: m.default })));
+const PasswordReset = lazy(() => import('../pages/Auth/PasswordReset').then((m) => ({ default: m.default })));
+
+const RouteFallback: React.FC = () => (
+  <div className="flex items-center justify-center min-h-screen bg-gray-50">
+    <div className="text-center">
+      <div className="inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+      <p className="mt-3 text-sm text-gray-600">Loading…</p>
+    </div>
+  </div>
+);
 
 export const AppRouter: React.FC = () => {
   return (
-    <BrowserRouter>
+    <>
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
@@ -158,7 +173,7 @@ export const AppRouter: React.FC = () => {
         <Route
           path="/settings"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["admin"]}>
               <AppShell>
                 <SettingsPageComplete />
               </AppShell>
@@ -223,7 +238,8 @@ export const AppRouter: React.FC = () => {
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-    </BrowserRouter>
+      </Suspense>
+    </>
   );
 };
 

@@ -103,9 +103,21 @@ def build_error_response(
 
 
 def _json_response(request: Request, status_code: int, detail: Any, headers: Optional[dict] = None) -> JSONResponse:
+    body = build_error_response(request, status_code, detail)
+    # Surface the request id so the frontend (and curl users) can correlate
+    # the response with server logs. The middleware adds it to
+    # ``request.state.request_id``; it may be missing when the error happens
+    # outside the ASGI lifecycle (e.g. startup).
+    try:
+        from app.core.request_id import current_request_id
+        rid = current_request_id() or request.state.request_id
+        if rid:
+            body["request_id"] = rid
+    except AttributeError:
+        pass
     return JSONResponse(
         status_code=status_code,
-        content=build_error_response(request, status_code, detail),
+        content=body,
         headers=headers,
     )
 

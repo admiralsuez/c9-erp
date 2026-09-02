@@ -27,27 +27,28 @@ class Order(Base):
     
     id = Column(Integer, primary_key=True)
     order_number = Column(String(50), unique=True, nullable=False)  # format from settings.order_number_format
-    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    vendor_id = Column(Integer, ForeignKey("vendors.id", ondelete="RESTRICT"), nullable=False)
     status = Column(String(30), nullable=False, default="draft")  # draft | pending_requisition | signed_requisition_uploaded | approved | dispatched | delivered | closed | cancelled
     remarks = Column(Text)
     delivery_address = Column(Text)
     challan_book_number = Column(String(100), nullable=True)  # Challan book number when dispatching
     order_date = Column(DateTime(timezone=True), nullable=True)  # Optional backdate for order
-    created_by = Column(Integer, ForeignKey("users.id"))
-    approver_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    approver_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
-    
+
     vendor = relationship("Vendor")
     creator = relationship("User", foreign_keys=[created_by])
     approver = relationship("User", foreign_keys=[approver_id])
-    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
-    timeline_entries = relationship("OrderTimeline", back_populates="order", cascade="all, delete-orphan")
-    
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan", passive_deletes=True)
+    timeline_entries = relationship("OrderTimeline", back_populates="order", cascade="all, delete-orphan", passive_deletes=True)
+
     __table_args__ = (
         Index("idx_orders_vendor", "vendor_id"),
         Index("idx_orders_status", "status"),
+        Index("idx_orders_approver", "approver_id"),
         Index("idx_orders_created_at", "created_at"),
         Index("idx_orders_deleted_at", "deleted_at"),
         Index("idx_orders_vendor_deleted", "vendor_id", "deleted_at"),
@@ -59,24 +60,25 @@ class Notification(Base):
     __tablename__ = "notifications"
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    actor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     title = Column(String(200), nullable=False)
     message = Column(Text)
     type = Column(String(50), default="info")  # info | warning | approval | success | error
     related_entity_type = Column(String(50))
     related_entity_id = Column(Integer)
-    is_read = Column(Boolean, default=False)
+    is_read = Column(Boolean, default=False, nullable=False)
     is_approved = Column(Boolean, default=False, nullable=False)  # For approval notifications - persists until approved
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-    
+
     user = relationship("User", foreign_keys=[user_id])
     actor = relationship("User", foreign_keys=[actor_id])
-    
+
     __table_args__ = (
         Index("idx_notifications_user", "user_id"),
         Index("idx_notifications_unread", "user_id", "is_read"),
         Index("idx_notifications_approval", "user_id", "type", "is_approved"),
+        Index("idx_notifications_actor", "actor_id"),
     )
 
 
@@ -85,7 +87,7 @@ class OrderItem(Base):
     
     id = Column(Integer, primary_key=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
-    item_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=False)
+    item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="RESTRICT"), nullable=False)
     quantity_ordered = Column(Numeric(12, 2), nullable=False)
     quantity_reserved = Column(Numeric(12, 2), default=0, nullable=False)
     quantity_dispatched = Column(Numeric(12, 2), default=0, nullable=False)
@@ -94,13 +96,14 @@ class OrderItem(Base):
     return_reason = Column(String(50), nullable=True)  # damaged | not_needed | null
     return_status = Column(String(50), nullable=True)  # pending | completed
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-    
+
     order = relationship("Order", back_populates="items")
     item = relationship("InventoryItem")
-    return_photos = relationship("ReturnPhoto", back_populates="order_item", cascade="all, delete-orphan")
-    
+    return_photos = relationship("ReturnPhoto", back_populates="order_item", cascade="all, delete-orphan", passive_deletes=True)
+
     __table_args__ = (
         Index("idx_order_items_order", "order_id"),
+        Index("idx_order_items_item", "item_id"),
     )
 
 
@@ -110,29 +113,29 @@ class ReturnPhoto(Base):
     id = Column(Integer, primary_key=True)
     order_item_id = Column(Integer, ForeignKey("order_items.id", ondelete="CASCADE"), nullable=False)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
-    item_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=False)
+    item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="RESTRICT"), nullable=False)
     storage_path = Column(String(500), nullable=False)
     file_name = Column(String(255))
-    uploaded_by = Column(Integer, ForeignKey("users.id"))
+    uploaded_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-    
+
     order_item = relationship("OrderItem", back_populates="return_photos")
     uploader = relationship("User")
 
 
 class OrderTimeline(Base):
     __tablename__ = "order_timeline"
-    
+
     id = Column(Integer, primary_key=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     action = Column(String(50), nullable=False)  # created | requisition_generated | requisition_regenerated | signed_uploaded | approved | dispatched | delivered | closed | cancelled | reopened | comment
     comments = Column(Text)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-    
+
     order = relationship("Order", back_populates="timeline_entries")
     user = relationship("User")
-    
+
     __table_args__ = (
         Index("idx_timeline_order", "order_id"),
     )
@@ -141,7 +144,7 @@ class OrderTimeline(Base):
 # ============ PHASE 3: DOCUMENTS + REQUISITION PDF + SIGNATURE WORKFLOW ============
 class Document(Base):
     __tablename__ = "documents"
-    
+
     id = Column(Integer, primary_key=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"))
     file_name = Column(String(255), nullable=False)
@@ -149,19 +152,20 @@ class Document(Base):
     storage_path = Column(String(500), nullable=False)  # local path now, S3 key later
     doc_category = Column(String(50))  # requisition | signed_requisition | delivery_challan | invoice | approval_letter | proof_of_delivery | other
     version = Column(Integer, default=1, nullable=False)
-    parent_document_id = Column(Integer, ForeignKey("documents.id"))  # version chain
+    parent_document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"))  # version chain
     version_status = Column(String(20), default="current", nullable=False)  # current | superseded
     challan_book_number = Column(String(50), nullable=True)  # challan book number for delivery challan
     notes = Column(Text)
-    uploaded_by = Column(Integer, ForeignKey("users.id"))
+    uploaded_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     uploaded_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-    
+
     order = relationship("Order")
     uploader = relationship("User")
     parent_document = relationship("Document", remote_side=[id])
-    
+
     __table_args__ = (
         Index("idx_documents_order", "order_id"),
         Index("idx_docs_order_category_status", "order_id", "doc_category", "version_status"),
+        Index("idx_doc_parent", "parent_document_id"),
     )
 

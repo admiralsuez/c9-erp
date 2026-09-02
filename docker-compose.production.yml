@@ -29,6 +29,7 @@ services:
       ENVIRONMENT: production
       DEBUG: "false"
       LOG_LEVEL: INFO
+      LOG_FORMAT: ${LOG_FORMAT:-text}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: HS256
       JWT_EXPIRATION_HOURS: "24"
@@ -36,7 +37,8 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-https://erp.thecloud9corp.com}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-erp.thecloud9corp.com,localhost,127.0.0.1}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@cloud9.local}
-      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-Admin@12345}
+      # No default — startup fails if INITIAL_ADMIN_PASSWORD is unset
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD must be set}
     # Backend listens on all interfaces within docker network
     ports:
       - "8000:8000"
@@ -50,8 +52,10 @@ services:
     restart: unless-stopped
     networks:
       - cloud9-network
+    # Phase 5.4 — liveness vs readiness probes.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # Liveness: process is up. Used by Docker restart policy.
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3

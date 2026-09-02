@@ -6,12 +6,16 @@ from app.core.database import Base
 # ============ INVENTORY ============
 class InventoryCategory(Base):
     __tablename__ = "inventory_categories"
-    
+
     id = Column(Integer, primary_key=True)
     name = Column(String(100), unique=True, nullable=False)
-    parent_id = Column(Integer, ForeignKey("inventory_categories.id"))
-    
+    parent_id = Column(Integer, ForeignKey("inventory_categories.id", ondelete="SET NULL"))
+
     items = relationship("InventoryItem", back_populates="category")
+
+    __table_args__ = (
+        Index("idx_inventory_category_parent", "parent_id"),
+    )
 
 
 class InventoryItem(Base):
@@ -44,18 +48,19 @@ class InventoryItem(Base):
     
     category = relationship("InventoryCategory", back_populates="items")
     bin = relationship("WarehouseBin", back_populates="inventory_items")
-    transactions = relationship("InventoryTransaction", back_populates="item")
-    images = relationship("InventoryItemImage", back_populates="item", cascade="all, delete-orphan")
-    serial_numbers = relationship("SerialNumber", back_populates="item", cascade="all, delete-orphan")
-    attributes = relationship("InventoryItemAttribute", back_populates="item", cascade="all, delete-orphan")
+    transactions = relationship("InventoryTransaction", back_populates="item", cascade="all, delete-orphan", passive_deletes=True)
+    images = relationship("InventoryItemImage", back_populates="item", cascade="all, delete-orphan", passive_deletes=True)
+    serial_numbers = relationship("SerialNumber", back_populates="item", cascade="all, delete-orphan", passive_deletes=True)
+    attributes = relationship("InventoryItemAttribute", back_populates="item", cascade="all, delete-orphan", passive_deletes=True)
     parent = relationship("InventoryItem", remote_side=[id], back_populates="children")
-    children = relationship("InventoryItem", back_populates="parent", cascade="all, delete-orphan")
+    children = relationship("InventoryItem", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)
     
     __table_args__ = (
         Index("idx_inventory_sku", "sku"),
         Index("idx_inventory_barcode", "barcode"),
         Index("idx_inventory_category", "category_id"),
         Index("idx_inventory_parent", "parent_id"),
+        Index("idx_inventory_bin", "bin_id"),
         Index("idx_inventory_deleted_at", "deleted_at"),
         Index("idx_inventory_is_draft", "is_draft"),
         Index("idx_inventory_low_stock", "current_quantity", "minimum_quantity"),
@@ -100,7 +105,7 @@ class InventoryTransaction(Base):
     __tablename__ = "inventory_transactions"
     
     id = Column(Integer, primary_key=True)
-    item_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=False)
+    item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
     transaction_type = Column(String(30), nullable=False)  # opening_balance | stock_added | dispatch | adjustment | correction | return | transfer_out | transfer_in
     previous_quantity = Column(Numeric(12, 2), nullable=False)
     change_quantity = Column(Numeric(12, 2), nullable=False)
@@ -108,7 +113,7 @@ class InventoryTransaction(Base):
     reference_type = Column(String(30))  # restock | order | return | transfer
     reference_id = Column(Integer)
     reason = Column(Text)
-    created_by = Column(Integer, ForeignKey("users.id"))
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     
     item = relationship("InventoryItem", back_populates="transactions")
@@ -117,6 +122,7 @@ class InventoryTransaction(Base):
     __table_args__ = (
         Index("idx_txn_item", "item_id"),
         Index("idx_txn_created_at", "created_at"),
+        Index("idx_txn_reference", "reference_type", "reference_id"),
     )
 
 
@@ -128,7 +134,7 @@ class InventoryItemImage(Base):
     item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
     image_type = Column(String(20), nullable=False)  # "front" | "back"
     image_url = Column(String(500), nullable=False)  # DigitalOcean Spaces URL
-    uploaded_by = Column(Integer, ForeignKey("users.id"))
+    uploaded_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     uploaded_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     
     item = relationship("InventoryItem", back_populates="images")
@@ -149,21 +155,23 @@ class SerialNumber(Base):
     serial_number = Column(String(255), nullable=False)  # e.g., "FRIDGE-001-SN001" or "RB-200"
     batch_id = Column(String(100))  # e.g., "RB-2024-BATCH1" for ranges
     unit_condition = Column(String(30), default="new")  # "new" | "used" | "damaged" | "refurbished"
-    location_bin_id = Column(Integer, ForeignKey("warehouse_bins.id"))  # Where this specific unit is stored
-    assigned_to_order_id = Column(Integer, ForeignKey("orders.id"))  # null if in stock, populated if dispatched
+    location_bin_id = Column(Integer, ForeignKey("warehouse_bins.id", ondelete="SET NULL"))  # Where this specific unit is stored
+    assigned_to_order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"))  # null if in stock, populated if dispatched
     notes = Column(Text)  # Additional notes about this unit
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
-    
+
     item = relationship("InventoryItem", back_populates="serial_numbers")
     location_bin = relationship("WarehouseBin")
     assigned_order = relationship("Order")
-    
+
     __table_args__ = (
+        UniqueConstraint("serial_number", name="uq_serial_number"),
         Index("idx_serial_item", "item_id"),
         Index("idx_serial_number", "serial_number"),
         Index("idx_serial_batch", "batch_id"),
         Index("idx_serial_order", "assigned_to_order_id"),
         Index("idx_serial_condition", "unit_condition"),
+        Index("idx_serial_location_bin", "location_bin_id"),
     )
 

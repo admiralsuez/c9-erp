@@ -11,7 +11,7 @@ class VendorType(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(100), unique=True, nullable=False)
     
-    vendors = relationship("Vendor", back_populates="vendor_type_rel")
+    vendors = relationship("Vendor", back_populates="vendor_type_rel", passive_deletes=True)
 
 
 # ============ VENDORS ============
@@ -22,7 +22,7 @@ class Vendor(Base):
     name = Column(String(200), nullable=False)
     name_normalized = Column(String(200), nullable=False, unique=True)
     vendor_type = Column(String(50))
-    vendor_type_id = Column(Integer, ForeignKey("vendor_types.id"), nullable=True)
+    vendor_type_id = Column(Integer, ForeignKey("vendor_types.id", ondelete="SET NULL"), nullable=True)
     contact_person = Column(String(150))
     phone = Column(String(30))
     email = Column(String(150))
@@ -37,7 +37,7 @@ class Vendor(Base):
     vendor_token_hash = Column(String(64), unique=True)  # Phase 8: SHA-256 hash of vendor token
     vendor_token_expires_at = Column(DateTime(timezone=True))  # Phase 4: token expiry
     allow_portal = Column(Boolean, default=True, nullable=False)  # Phase 4: portal access flag
-    parent_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)  # For vendor address hierarchy
+    parent_id = Column(Integer, ForeignKey("vendors.id", ondelete="SET NULL"), nullable=True)  # For vendor address hierarchy
     is_active = Column(Boolean, default=True, nullable=False)
     deleted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
@@ -45,11 +45,24 @@ class Vendor(Base):
     
     vendor_type_rel = relationship("VendorType", back_populates="vendors")
     parent = relationship("Vendor", remote_side=[id], backref="children")
-    
+
+    @property
+    def resolved_vendor_type(self) -> str | None:
+        """Return the vendor type name from the FK, falling back to the legacy string.
+
+        Prefer this over accessing ``vendor.vendor_type`` directly when reading —
+        it always returns the up-to-date value regardless of which column was last
+        written. Write paths must keep the FK and the string in sync.
+        """
+        if self.vendor_type_rel is not None:
+            return self.vendor_type_rel.name
+        return self.vendor_type
+
     __table_args__ = (
         Index("idx_vendor_name_normalized", "name_normalized"),
         Index("idx_vendor_token", "vendor_token"),
         Index("idx_vendor_token_hash", "vendor_token_hash"),
+        Index("idx_vendor_type_id", "vendor_type_id"),
         Index("idx_vendor_deleted_at", "deleted_at"),
     )
 

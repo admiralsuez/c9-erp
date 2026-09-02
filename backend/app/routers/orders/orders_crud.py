@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.auth import get_current_user, require_permission
 from app.core.database import get_db
 from app.models import InventoryItem, Order, OrderItem, SerialNumber, User, Vendor
-from app.schemas import InventoryItemResponse, OrderCreateRequest, OrderResponse, OrderUpdateRequest
+from app.schemas import InventoryItemResponse, OrderCreateRequest, OrderResponse, OrderUpdateRequest, PaginatedResponse
 from app.schemas.imports import OrderImportRow, ImportResult, ImportError, get_order_template
 from app.services.serial_number_service import serial_number_service
 from app.services.query_optimizer import optimize_order_query
@@ -219,57 +219,43 @@ def list_orders(
     else:  # created_date
         # Most recently created first
         query = query.order_by(desc(Order.created_at))
-    
+
     try:
         total = query.count()
     except Exception as e:
-        logger.error(f"Error counting orders: {e}")
-        return {
-            "items": [],
-            "total": 0,
-            "page": page,
-            "size": size,
-            "pages": 0,
-            "error": "Failed to count orders"
-        }
-    
+        logger.exception("Failed to count orders")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to count orders at this time"
+        )
+
     skip = (page - 1) * size
     try:
         orders = optimize_order_query(query).offset(skip).limit(size).all()
     except Exception as e:
-        logger.error(f"Error fetching orders: {e}")
-        return {
-            "items": [],
-            "total": total,
-            "page": page,
-            "size": size,
-            "pages": 0,
-            "error": "Failed to fetch orders"
-        }
-    
+        logger.exception("Failed to fetch orders")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to fetch orders at this time"
+        )
+
     total_pages = (total + size - 1) // size
-    
-    # Serialize orders safely
-    try:
-        orders_data = []
-        for order in orders:
-            try:
-                orders_data.append(OrderResponse.model_validate(order))
-            except Exception as e:
-                logger.error(f"Error validating order {order.id}: {e}")
-                # Skip orders that fail validation
-                continue
-    except Exception as e:
-        logger.error(f"Error serializing orders: {e}")
-        orders_data = []
-    
-    return {
-        "items": orders_data,
-        "total": total,
-        "page": page,
-        "size": size,
-        "pages": total_pages
-    }
+
+    # Serialize orders — skip individual failures but don't mask DB errors
+    orders_data = []
+    for order in orders:
+        try:
+            orders_data.append(OrderResponse.model_validate(order))
+        except Exception as e:
+            logger.error(f"Error validating order {order.id}: {e}")
+            continue
+
+    return PaginatedResponse[OrderResponse].build(
+        items=orders_data,
+        total=total,
+        page=page,
+        size=size,
+    )
 @router.get("/available-items")
 def list_available_items(
     category_id: int = Query(None),
@@ -459,19 +445,54 @@ def import_orders(
         
         # Validate and parse rows
         valid_rows, validation_errors = validate_and_parse_rows(rows, OrderImportRow)
-        
+
         # Check for FK issues and create orders
         all_errors = list(validation_errors)
         created_count = 0
-        
+
+        # Bulk-fetch all referenced vendor and item IDs in single queries to avoid N+1
+        vendor_ids = {r.vendor_id for r in valid_rows if r.vendor_id}
+        item_ids = {r.item_id for r in valid_rows if r.item_id}
+
+        vendors_by_id = {}
+        if vendor_ids:
+            vendors_by_id = {
+                v.id: v
+                for v in db.query(Vendor).filter(
+                    Vendor.id.in_(vendor_ids),
+                    Vendor.deleted_at == None
+                ).all()
+            }
+
+        items_by_id = {}
+        if item_ids:
+            items_by_id = {
+                i.id: i
+                for i in db.query(InventoryItem).filter(
+                    InventoryItem.id.in_(item_ids),
+                    InventoryItem.deleted_at == None
+                ).all()
+            }
+
+        # Bulk-fetch parent-child relationships in a single query
+        parent_ids_with_children = set()
+        if items_by_id:
+            parent_ids_with_children = {
+                p_id for (p_id,) in db.query(InventoryItem.parent_id)
+                .filter(
+                    InventoryItem.parent_id.in_(items_by_id.keys()),
+                    InventoryItem.deleted_at == None
+                )
+                .distinct()
+                .all()
+                if p_id is not None
+            }
+
         try:
             for order_data in valid_rows:
-                # Validate vendor exists
-                vendor = db.query(Vendor).filter(
-                    Vendor.id == order_data.vendor_id,
-                    Vendor.deleted_at == None
-                ).first()
-                
+                # Vendor already fetched in bulk above
+                vendor = vendors_by_id.get(order_data.vendor_id)
+
                 if not vendor:
                     all_errors.append(ImportError(
                         row_number=len(all_errors) + 2,
@@ -479,13 +500,10 @@ def import_orders(
                         values=order_data.model_dump()
                     ))
                     continue
-                
-                # Validate item exists
-                item = db.query(InventoryItem).filter(
-                    InventoryItem.id == order_data.item_id,
-                    InventoryItem.deleted_at == None
-                ).first()
-                
+
+                # Item already fetched in bulk above
+                item = items_by_id.get(order_data.item_id)
+
                 if not item:
                     all_errors.append(ImportError(
                         row_number=len(all_errors) + 2,
@@ -493,14 +511,9 @@ def import_orders(
                         values=order_data.model_dump()
                     ))
                     continue
-                
-                # Validate item is not a parent (cannot order parent items directly)
-                item_children = db.query(InventoryItem).filter(
-                    InventoryItem.parent_id == item.id,
-                    InventoryItem.deleted_at == None
-                ).count()
-                
-                if item_children > 0:
+
+                # Validate item is not a parent (parent-child map already bulk-fetched)
+                if item.id in parent_ids_with_children:
                     all_errors.append(ImportError(
                         row_number=len(all_errors) + 2,
                         reason=f"Item '{item.name}' is a parent product. Select a variant instead.",

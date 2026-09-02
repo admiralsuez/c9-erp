@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_admin, hash_password
 from app.models import User, Role
-from app.schemas import UserCreate, UserUpdate, UserResponse
+from app.schemas import UserCreate, UserUpdate, UserResponse, PaginatedResponse
 from app.services.pagination_utils import paginate_query, total_pages
 from datetime import datetime, timezone
 
@@ -25,15 +25,13 @@ def list_users(
     sliced, page, size, total = paginate_query(query, page, size)
 
     users = sliced.all()
-    pages = total_pages(total, size) or 1
 
-    return {
-        "items": [UserResponse.model_validate(u) for u in users],
-        "total": total,
-        "page": page,
-        "size": size,
-        "pages": pages
-    }
+    return PaginatedResponse[UserResponse].build(
+        items=[UserResponse.model_validate(u) for u in users],
+        total=total,
+        page=page,
+        size=size,
+    )
 
 @router.get("/approvers", tags=["Users"])
 def list_approvers(

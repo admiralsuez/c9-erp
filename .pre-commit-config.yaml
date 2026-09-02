@@ -1,0 +1,60 @@
+# Pre-commit hooks for the Cloud9 ERP repo.
+#
+# Install:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run on demand (CI also runs these on every push):
+#   pre-commit run --all-files
+#
+# Skipping locally (use sparingly — CI still enforces):
+#   git commit --no-verify
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(.*\.md|.*\.csv|.*\.po)$
+      - id: end-of-file-fixer
+        exclude: ^(.*\.md|.*\.csv|.*\.po)$
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        name: ruff (backend lint)
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^backend/
+
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.13.0
+    hooks:
+      - id: eslint
+        name: eslint (frontend lint)
+        files: ^frontend/src/.*\.(ts|tsx)$
+        additional_dependencies:
+          - eslint@^10.0.0
+
+  - repo: local
+    hooks:
+      - id: backend-py-compile
+        name: py_compile (backend)
+        entry: python -m py_compile
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: true
+
+      - id: frontend-typecheck
+        name: tsc --noEmit (frontend)
+        entry: bash -c 'cd frontend && npx tsc -b --noEmit'
+        language: system
+        files: ^frontend/src/.*\.(ts|tsx)$
+        pass_filenames: false

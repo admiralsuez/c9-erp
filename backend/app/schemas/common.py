@@ -1,7 +1,9 @@
 from __future__ import annotations
-from typing import Optional, List
+from typing import Any, Generic, List, Optional, TypeVar
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
+
+T = TypeVar("T")
 
 
 # ============ SETTINGS ============
@@ -48,12 +50,25 @@ class PaginationParams(BaseModel):
         return (self.page - 1) * self.size
 
 
-class PaginatedResponse(BaseModel):
-    items: List
+class PaginatedResponse(BaseModel, Generic[T]):
+    """Standard envelope for paginated list responses.
+
+    Every list endpoint across the API returns this shape so the frontend can
+    rely on a single parsing path. ``items`` carries the per-row payload;
+    ``total`` is the unpaginated row count; ``pages`` is the total page count
+    (computed as ``(total + size - 1) // size``, never negative).
+    """
+    items: List[T]
     total: int
     page: int
     size: int
-    total_pages: int
+    pages: int
+
+    @classmethod
+    def build(cls, items: List[T], total: int, page: int, size: int) -> "PaginatedResponse[T]":
+        """Construct from raw items, computing pages automatically."""
+        pages = (total + size - 1) // size if size > 0 else 0
+        return cls(items=items, total=total, page=page, size=size, pages=pages)
 
 
 # ============ AUDIT LOG ============

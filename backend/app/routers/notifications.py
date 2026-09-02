@@ -76,9 +76,8 @@ def mark_notification_read(
         Notification.id == notification_id,
         Notification.user_id == current_user.id
     ).first()
-    
-    if not notification:
-        require_found(notification, "Notification", notification_id)
+
+    require_found(notification, "Notification", notification_id)
 
     notification.is_read = True
     db.commit()
@@ -108,15 +107,14 @@ def approve_notification(
         Notification.id == notification_id,
         Notification.user_id == current_user.id
     ).first()
-    
-    if not notification:
-        require_found(notification, "Notification", notification_id)
-    
+
+    require_found(notification, "Notification", notification_id)
+
     # Mark as approved
     notification.is_approved = True
     notification.is_read = True
     db.commit()
-    
+
     # Delete the notification after approval
     db.delete(notification)
     db.commit()

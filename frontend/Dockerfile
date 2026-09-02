@@ -31,6 +31,11 @@ RUN npm install -g serve
 # Copy built assets from builder stage
 COPY --from=builder /app/dist ./dist
 
+# Create non-root user, give it ownership of dist
+RUN addgroup -g 1000 appuser && adduser -u 1000 -G appuser -D appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 # Expose port (must match docker-compose and nginx upstream)
 EXPOSE 5173
 

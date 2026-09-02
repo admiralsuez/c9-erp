@@ -46,14 +46,15 @@ def main() -> None:
         fail("JWT_SECRET must be at least 32 characters")
 
     admin_email = os.getenv("INITIAL_ADMIN_EMAIL", "admin@cloud9.local")
-    admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "Admin@12345")
+    admin_password = os.getenv("INITIAL_ADMIN_PASSWORD")
+    if not admin_password:
+        fail("INITIAL_ADMIN_PASSWORD environment variable must be set")
     if "@" not in admin_email:
         fail("INITIAL_ADMIN_EMAIL must be a valid email-like value")
-    if len(admin_password) < 8:
-        fail("INITIAL_ADMIN_PASSWORD must be at least 8 characters")
-
-    if admin_password == "Admin@12345":
-        warn("INITIAL_ADMIN_PASSWORD is the default bootstrap password. Change it after first login.")
+    if len(admin_password) < 12:
+        fail("INITIAL_ADMIN_PASSWORD must be at least 12 characters")
+    if admin_password.lower() == "admin@12345":
+        fail("INITIAL_ADMIN_PASSWORD cannot be the default bootstrap password")
 
     print("[✓] Environment validation passed")
 

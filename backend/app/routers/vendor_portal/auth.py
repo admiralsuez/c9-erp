@@ -55,18 +55,18 @@ def request_magic_link(
     magic_url = f"{request.base_url}vendor-portal/verify-magic-link?token={magic_link_jwt}"
     email_sent = False
     try:
-        from app.services.email_service import get_email_service
-        svc = get_email_service()
-        svc.send_email(
+        from app.services.email_service import safe_send_templated_email
+        email_sent = safe_send_templated_email(
             to_email=vendor.email,
-            subject="Your Cloud9 ERP Portal Login Link",
-            body_html=f"""<h2>Cloud9 ERP Vendor Portal</h2>
+            template={"subject": "Your Cloud9 ERP Portal Login Link",
+                      "body_html": f"""<h2>Cloud9 ERP Vendor Portal</h2>
 <p>Click the link below to log in to your vendor portal:</p>
 <p><a href="{magic_url}">Log in to Portal</a></p>
 <p>This link expires in 15 minutes.</p>
-<p>If you did not request this, please ignore this email.</p>""",
+<p>If you did not request this, please ignore this email.</p>"""},
+            context={},
+            context_label="vendor-portal-magic-link",
         )
-        email_sent = True
     except Exception:
         pass
 

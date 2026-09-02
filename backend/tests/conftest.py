@@ -86,12 +86,62 @@ def client(test_client):
     return test_client
 
 
+@pytest.fixture
+def transactional_db(test_engine):
+    """Provide an isolated session per test using SAVEPOINT-based rollback.
+
+    The session begins a transaction; any data inserted via this session is
+    rolled back at teardown, so tests don't see each other's state and we
+    avoid the cost of ``DELETE FROM every_table`` between every test.
+
+    The session is also wired up as ``get_db`` so HTTP clients see the same
+    transactional state.
+    """
+    connection = test_engine.connect()
+    transaction = connection.begin()
+    TestingSessionLocal = sessionmaker(
+        bind=connection,
+        autoflush=False,
+        autocommit=False,
+        join_transaction_mode="create_savepoint",
+    )
+    session = TestingSessionLocal()
+
+    def override_get_db():
+        try:
+            yield session
+        finally:
+            # Don't close here — the fixture owns the lifecycle.
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        yield session
+    finally:
+        session.close()
+        if transaction.is_active:
+            transaction.rollback()
+        connection.close()
+        app.dependency_overrides.pop(get_db, None)
+
+
 def create_test_roles_and_perms(db, extra_codes=None):
-    """Create standard roles and permissions for testing."""
+    """Create standard roles and permissions for testing.
+
+    The Admin role receives EVERY permission listed here and in ``extra_codes``
+    (via the loop below), so tests that exercise the full order lifecycle and
+    vendor CRUD pass with the Phase 0.2 ``require_permission`` guards.
+    """
     all_codes = extra_codes or []
+    # Mirrors the production permission set in setup_firstrun.py / seed_data.py,
+    # plus every code referenced by order/vendor/inventory routers.
     base_codes = [
-        "inventory.create", "inventory.edit", "inventory.dispatch",
-        "orders.create", "orders.approve",
+        "dashboard.view",
+        "vendors.create", "vendors.edit", "vendors.delete",
+        "inventory.create", "inventory.edit", "inventory.dispatch", "inventory.restock",
+        "orders.create", "orders.approve", "orders.cancel", "orders.dispatch",
+        "orders.deliver", "orders.close", "orders.return", "orders.manage",
+        "users.manage", "reports.view",
     ]
     for code in set(base_codes + all_codes):
         if not db.query(Permission).filter(Permission.code == code).first():

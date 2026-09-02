@@ -5,6 +5,17 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
+/**
+ * Top-level error boundary.
+ *
+ * NOTE on navigation: this boundary sits ABOVE the BrowserRouter in the
+ * component tree (App.tsx), so ``useNavigate`` is not available here. We
+ * use ``window.location.assign`` for the recovery button — by the time a
+ * user clicks "Go to Home" the React tree has already failed, so a hard
+ * reload is the simplest correct recovery. Prefer ``useNavigate`` for any
+ * navigation that originates inside a healthy React tree (see
+ * AuthContext.logout, app pages, etc.).
+ */
 export class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   ErrorBoundaryState
@@ -35,7 +46,7 @@ export class ErrorBoundary extends React.Component<
             <button
               onClick={() => {
                 this.setState({ hasError: false, error: null });
-                window.location.href = '/';
+                window.location.assign('/');
               }}
               className="btn-primary"
             >

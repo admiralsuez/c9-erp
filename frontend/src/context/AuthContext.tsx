@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { User, AuthResponse } from '../types';
 import apiClient from '../api/client';
 
@@ -16,6 +17,7 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
 
   // Check if user is already logged in and verify with server
   useEffect(() => {
@@ -84,9 +86,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('user_data');
     setUser(null);
 
-    // Redirect to login
-    window.location.href = '/login';
-  }, []);
+    // Navigate to login using router (preserves SPA state)
+    navigate('/login', { replace: true });
+  }, [navigate]);
 
   const value: AuthContextType = {
     user,

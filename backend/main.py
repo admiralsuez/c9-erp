@@ -4,6 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine, Base
 from app.core.config import settings
 from app.core.error_handler import register_exception_handlers
+from app.core.request_id import RequestIdMiddleware
+from app.core.query_timing import install_query_timing
+from app.core.background_tasks import start_workers
+from app.core.json_logging import configure_json_logging
 from app.services.rate_limiter import RateLimitMiddleware
 from app import models
 from fastapi.staticfiles import StaticFiles
@@ -49,6 +53,15 @@ _ch = logging.StreamHandler()
 _ch.setLevel(logging.INFO)
 _ch.setFormatter(_formatter)
 _root.addHandler(_ch)
+
+# Phase 5.3 — if LOG_FORMAT=json, swap formatter to the JSON variant.
+configure_json_logging()
+
+# Phase 5.5 — instrument SQLAlchemy with query timing + slow-query logging.
+install_query_timing()
+
+# Phase 5.7 — start the background worker pool for non-blocking tasks.
+start_workers(count=2)
 
 logger = logging.getLogger("main")
 logger.info(f"Log file: {_log_path}")
@@ -184,6 +197,9 @@ app.add_middleware(
 # Global rate limiting middleware (enforced before request handling)
 app.add_middleware(RateLimitMiddleware)
 
+# Phase 5.2 — request-id + metrics middleware
+app.add_middleware(RequestIdMiddleware)
+
 # Sensitive paths — never log request bodies for these
 _SENSITIVE_PATHS = ["/auth", "/vendor-portal", "/backup"]
 
@@ -263,9 +279,11 @@ os.makedirs(os.path.join(_static_dir, "uploads"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 # Include routers
-from app.routers import auth, users, settings as settings_router, vendors, inventory, warehouse, audit, orders, approval_rules, documents, vendor_portal, analytics, health, notifications, reports, backup
+from app.routers import auth, users, settings as settings_router, vendors, inventory, warehouse, audit, orders, approval_rules, documents, vendor_portal, analytics, health, notifications, reports, backup, observability
 from app.api.routes import inventory_images, inventory_serials
 
+# Phase 5 — observability endpoints (/metrics, /healthz, /readyz)
+app.include_router(observability.router)
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(users.router)

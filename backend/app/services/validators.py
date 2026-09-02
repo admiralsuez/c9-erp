@@ -6,9 +6,13 @@ so callers can rely on consistent error behavior.
 """
 from __future__ import annotations
 from typing import Any, Optional
+import logging
 import re
 
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 
 def require(condition: bool, detail: str, status_code: int = status.HTTP_400_BAD_REQUEST) -> None:
@@ -133,6 +137,43 @@ def validate_max_size(size: int, max_size: int, field_name: str = "File") -> Non
     """Raise 413 when ``size`` exceeds ``max_size`` (bytes)."""
     if size > max_size:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"{field_name} too large. Maximum size: {max_size / 1024 / 1024:.1f}MB",
+        )
+
+
+def safe_commit(
+    db: Session,
+    *,
+    context: str = "database operation",
+    rollback_on_error: bool = True,
+) -> None:
+    """Commit ``db`` and roll back on failure with a logged HTTP 500.
+
+    Replaces the recurring ``try: db.commit() / except: db.rollback(); raise``
+    pattern. Always raises a 500 so the global error handler can render a
+    consistent error envelope. The session is left in a clean state for the
+    next request.
+
+    Args:
+        db: Active SQLAlchemy session.
+        context: Short label used in log lines (e.g. "order create",
+            "approve order") so failures are traceable.
+        rollback_on_error: When True, attempt rollback before raising.
+
+    Raises:
+        HTTPException 500: when the commit raises any DBAPIError.
+    """
+    try:
+        db.commit()
+    except Exception:
+        if rollback_on_error:
+            try:
+                db.rollback()
+            except Exception:
+                logger.exception("Rollback also failed after %s failure", context)
+        logger.exception("Commit failed during %s", context)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save changes during {context}",
         )

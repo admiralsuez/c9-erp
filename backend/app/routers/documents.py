@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_admin
 from app.models import User, Document, Order
-from app.schemas import DocumentResponse, DocumentVersionHistoryResponse
+from app.schemas import DocumentResponse, DocumentVersionHistoryResponse, PaginatedResponse
 from app.services.storage import get_storage_backend, LocalDiskBackend
 from app.services.validators import validate_file_type, validate_max_size
 from typing import List, Optional
@@ -117,13 +117,12 @@ def list_order_documents(
     skip = (page - 1) * size
     documents = query.offset(skip).limit(size).all()
     
-    return {
-        "items": [DocumentResponse.model_validate(d) for d in documents],
-        "total": total,
-        "page": page,
-        "size": size,
-        "pages": (total + size - 1) // size if total > 0 else 1
-    }
+    return PaginatedResponse[DocumentResponse].build(
+        items=[DocumentResponse.model_validate(d) for d in documents],
+        total=total,
+        page=page,
+        size=size,
+    )
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)

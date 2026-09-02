@@ -70,11 +70,20 @@ def setup_roles_permissions(db):
         permissions_data = [
             ("dashboard.view", "View analytics dashboard"),
             ("vendors.create", "Create vendors"),
+            ("vendors.edit", "Edit vendors"),
+            ("vendors.delete", "Delete vendors"),
             ("inventory.create", "Create inventory items"),
             ("inventory.edit", "Edit inventory"),
             ("inventory.dispatch", "Dispatch inventory"),
+            ("inventory.restock", "Restock inventory"),
             ("orders.create", "Create orders"),
             ("orders.approve", "Approve orders"),
+            ("orders.cancel", "Cancel orders"),
+            ("orders.dispatch", "Dispatch orders"),
+            ("orders.deliver", "Mark orders delivered"),
+            ("orders.close", "Close orders"),
+            ("orders.return", "Process order returns"),
+            ("orders.manage", "Manage order details"),
             ("users.manage", "Manage users"),
             ("reports.view", "View reports"),
         ]
@@ -114,7 +123,12 @@ def create_admin_user(db, email=None, password=None):
     """Create initial admin user."""
     print("[*] Checking for admin user...")
     email = email or os.getenv("INITIAL_ADMIN_EMAIL", "admin@cloud9.local")
-    password = password or os.getenv("INITIAL_ADMIN_PASSWORD", "Admin@12345")
+    password = password or os.getenv("INITIAL_ADMIN_PASSWORD")
+    if not password:
+        raise RuntimeError(
+            "INITIAL_ADMIN_PASSWORD environment variable must be set. "
+            "Refusing to bootstrap with an empty or default password."
+        )
     
     try:
         # Check if admin already exists

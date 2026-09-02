@@ -21,7 +21,7 @@ const statusLabels: Record<string, string> = {
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
-  const { data, isLoading, error } = useDashboardOverview(10);
+  const { data, isLoading, error } = useDashboardOverview();
   const navigate = useNavigate();
 
   // Check if user has dashboard.view permission

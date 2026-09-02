@@ -18,7 +18,8 @@ RUN chmod +x start.sh
 # Create non-root user and give it ownership of writable dirs
 RUN useradd --create-home --uid 1001 --shell /bin/bash appuser \
     && mkdir -p /app/logs /app/backups /app/static/uploads \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \
+    && chmod 755 /app/logs /app/backups /app/static/uploads
 USER appuser
 
 CMD ["sh", "start.sh"]

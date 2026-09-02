@@ -69,9 +69,8 @@ export interface DashboardOverview {
 }
 
 export const analyticsApi = {
-  getDashboardOverview: async (limit?: number): Promise<DashboardOverview> => {
-    const url = limit ? `/analytics/dashboard/overview?limit=${limit}` : '/analytics/dashboard/overview';
-    const response = await apiClient.get<DashboardOverview>(url);
+  getDashboardOverview: async (): Promise<DashboardOverview> => {
+    const response = await apiClient.get<DashboardOverview>('/analytics/dashboard/overview');
     return response.data;
   },
 };

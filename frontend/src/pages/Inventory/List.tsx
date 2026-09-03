@@ -53,7 +53,7 @@ export const InventoryListPage: React.FC = () => {
     searchQuery || undefined,
     undefined,
     selectedType === 'all' ? undefined : selectedType,
-    selectedStatus === 'low_stock' || undefined
+    selectedStatus === 'low_stock' ? true : undefined
   );
 
   const items = data?.items ?? [];

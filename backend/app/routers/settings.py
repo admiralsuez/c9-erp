@@ -18,20 +18,18 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 @router.get("", response_model=SettingsResponse)
-@cached("settings:singleton", ttl_seconds=120)
 def get_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get company settings. Cached for 2 minutes — invalidated on update."""
+    """Get company settings."""
     settings = db.query(SettingsModel).first()
     if not settings:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Settings not found. Run seed data first."
         )
-    # Serialise to Pydantic so the cached copy is detached from the session
-    # and safe to return after the request lifecycle ends.
+    # Return Pydantic object for FastAPI validation
     return SettingsResponse.model_validate(settings)
 
 

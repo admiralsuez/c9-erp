@@ -158,7 +158,6 @@ def create_vendor(
 
 # ============ VENDOR TYPES ============
 @router.get("/types", response_model=List[VendorTypeResponse])
-@cached("vendors:types", ttl_seconds=120)
 def list_vendor_types(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     vts = db.query(VendorType).order_by(VendorType.name).all()
     # Return Pydantic objects, not dicts

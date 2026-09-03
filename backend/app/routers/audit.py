@@ -34,8 +34,10 @@ def list_audit_logs(
     if entity_type:
         query = query.filter(AuditLog.entity_type == entity_type)
 
+    # Order before pagination (paginate_query applies LIMIT/OFFSET)
+    query = query.order_by(AuditLog.created_at.desc())
     sliced, page, size, total = paginate_query(query, page, size, default_size=50)
-    logs = sliced.order_by(AuditLog.created_at.desc()).all()
+    logs = sliced.all()
 
     return PaginatedResponse[AuditLogResponse].build(
         items=[AuditLogResponse.model_validate(log) for log in logs],

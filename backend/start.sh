@@ -4,6 +4,12 @@
 # Setup failures are blocking in production so bad deployments fail visibly.
 
 set -e
+
+# Initialize writable directories with proper permissions
+echo "[*] Initializing directories..."
+mkdir -p /app/logs /app/backups /app/static/uploads
+chmod 755 /app/logs /app/backups /app/static/uploads
+
 echo "[*] Validating production environment..."
 python validate_env.py
 

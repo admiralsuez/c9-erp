@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/backup", tags=["Backup & Restore"])
 
-BACKUP_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "backups")
+# Store backups in /tmp to avoid Docker volume permission issues
+# /tmp is always writable and temporary backups are cleaned up by the OS
+BACKUP_DIR = "/tmp/c9erp_backups"
 
 
 def _ensure_backup_dir() -> None:
@@ -68,11 +70,10 @@ def _pg_env() -> dict:
 def _backup_db(destination: str) -> str:
     """Backup the database — pg_dump for Postgres, sqlite3 backup for SQLite.
     
-    Writes to /tmp first to avoid Docker volume permission issues, then moves to destination.
+    All backups are stored in /tmp/c9erp_backups (always writable, no volume permission issues).
     """
     if _IS_POSTGRES:
-        # Write to /tmp first (always writable), then move to final destination
-        temp_dump = os.path.join(tempfile.gettempdir(), f"pg_dump_{os.getpid()}.sql")
+        dump_path = destination.rsplit(".", 1)[0] + ".sql"
         cmd = [
             "pg_dump",
             "--host", _PG_HOST,
@@ -80,23 +81,11 @@ def _backup_db(destination: str) -> str:
             "--username", _PG_USER,
             "--dbname", _PG_DB,
             "--format", "plain",
-            "--file", temp_dump,
+            "--file", dump_path,
         ]
         result = subprocess.run(cmd, env=_pg_env(), capture_output=True, text=True, timeout=300)
         if result.returncode != 0:
-            if os.path.exists(temp_dump):
-                os.unlink(temp_dump)
             raise RuntimeError(f"pg_dump failed: {result.stderr.strip()}")
-        
-        # Move from /tmp to final destination
-        dump_path = destination.rsplit(".", 1)[0] + ".sql"
-        os.makedirs(os.path.dirname(dump_path), exist_ok=True)
-        try:
-            shutil.move(temp_dump, dump_path)
-        except Exception as e:
-            if os.path.exists(temp_dump):
-                os.unlink(temp_dump)
-            raise RuntimeError(f"Failed to move backup to {dump_path}: {str(e)}")
         return dump_path
     else:
         src = sqlite3.connect(DB_PATH)
@@ -134,10 +123,10 @@ def _validate_backup(filepath: str) -> bool:
 
 @router.get("/download")
 def download_backup(
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Download a full database backup."""
+    """Download a full database backup (requires authentication, no admin needed)."""
     _ensure_backup_dir()
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -157,10 +146,10 @@ def download_backup(
 @router.post("/restore")
 async def restore_backup(
     file: UploadFile = File(...),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Restore database from a backup file."""
+    """Restore database from a backup file (requires authentication, no admin needed)."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename required")
 
@@ -225,9 +214,9 @@ async def restore_backup(
 
 @router.get("/list")
 def list_backups(
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
 ):
-    """List available backup files."""
+    """List available backup files (requires authentication, no admin needed)."""
     _ensure_backup_dir()
 
     _ext = ".sql" if _IS_POSTGRES else ".db"
@@ -250,9 +239,9 @@ def list_backups(
 @router.get("/download-file/{filename:path}")
 def download_specific_backup(
     filename: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
 ):
-    """Download a specific backup file by name."""
+    """Download a specific backup file by name (requires authentication, no admin needed)."""
     filepath = os.path.normpath(os.path.join(BACKUP_DIR, filename))
     if not filepath.startswith(os.path.normpath(BACKUP_DIR)):
         raise HTTPException(status_code=400, detail="Invalid filename")
@@ -268,10 +257,10 @@ def download_specific_backup(
 @router.post("/email")
 def email_backup(
     recipients: str = Query(..., description="Comma-separated email addresses to send the backup to"),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create a backup and email it as an attachment to specified recipients."""
+    """Create a backup and email it to specified recipients (requires authentication, no admin needed)."""
     _ext = ".sql" if _IS_POSTGRES else ".db"
     _ensure_backup_dir()
 
@@ -322,9 +311,9 @@ def email_backup(
 
 @router.post("/trigger")
 def trigger_backup(
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
 ):
-    """Manually trigger an auto-backup now (same as periodic)."""
+    """Manually trigger an auto-backup now (requires authentication, no admin needed)."""
     _ensure_backup_dir()
 
     _ext = ".sql" if _IS_POSTGRES else ".db"

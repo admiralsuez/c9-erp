@@ -8,7 +8,8 @@ set -e
 # Initialize writable directories with proper permissions
 echo "[*] Initializing directories..."
 mkdir -p /app/logs /app/backups /app/static/uploads
-chmod 755 /app/logs /app/backups /app/static/uploads
+# Attempt to set permissions, but don't fail if volumes have different ownership
+chmod 755 /app/logs /app/backups /app/static/uploads 2>/dev/null || true
 
 echo "[*] Validating production environment..."
 python validate_env.py

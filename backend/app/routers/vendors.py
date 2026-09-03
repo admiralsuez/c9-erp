@@ -8,6 +8,14 @@ from app.schemas import VendorCreate, VendorUpdate, VendorResponse, VendorSummar
 from app.schemas.imports import VendorImportRow, ImportResult, get_vendor_template
 from app.services.csv_importer import parse_csv_file, validate_and_parse_rows, validate_headers, get_required_headers
 from app.core.response_cache import cached, invalidate as invalidate_cache
+from app.services.text_normalizer import (
+    normalize_vendor_name as normalize_vendor_display_name,
+    normalize_person_name,
+    normalize_address,
+    normalize_city,
+    normalize_state,
+    normalize_description
+)
 from typing import List, Optional
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
@@ -135,19 +143,19 @@ def create_vendor(
             vendor_type_str = vt.name
 
     vendor = Vendor(
-        name=vendor_data.name,
+        name=normalize_vendor_display_name(vendor_data.name),
         name_normalized=normalized_name,
         vendor_type=vendor_type_str,
         vendor_type_id=vendor_data.vendor_type_id,
-        contact_person=vendor_data.contact_person,
+        contact_person=normalize_person_name(vendor_data.contact_person) if vendor_data.contact_person else None,
         phone=vendor_data.phone,
         email=vendor_data.email,
-        address=vendor_data.address,
-        city=vendor_data.city,
-        state=vendor_data.state,
+        address=normalize_address(vendor_data.address) if vendor_data.address else None,
+        city=normalize_city(vendor_data.city) if vendor_data.city else None,
+        state=normalize_state(vendor_data.state) if vendor_data.state else None,
         pincode=vendor_data.pincode,
         gst=vendor_data.gst,
-        notes=vendor_data.notes,
+        notes=normalize_description(vendor_data.notes) if vendor_data.notes else None,
         parent_id=vendor_data.parent_id
     )
     db.add(vendor)
@@ -166,10 +174,11 @@ def list_vendor_types(db: Session = Depends(get_db), current_user: User = Depend
 
 @router.post("/types", response_model=VendorTypeResponse, status_code=status.HTTP_201_CREATED)
 def create_vendor_type(body: VendorTypeCreate, db: Session = Depends(get_db), current_user: User = Depends(require_permission("vendors.create"))):
-    existing = db.query(VendorType).filter(VendorType.name == body.name).first()
+    normalized_name = normalize_vendor_display_name(body.name)
+    existing = db.query(VendorType).filter(VendorType.name == normalized_name).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Vendor type already exists")
-    vt = VendorType(name=body.name)
+    vt = VendorType(name=normalized_name)
     db.add(vt)
     db.commit()
     db.refresh(vt)

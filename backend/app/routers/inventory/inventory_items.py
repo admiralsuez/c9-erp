@@ -35,6 +35,10 @@ from app.services.audit_service import log_audit
 from app.services.query_optimizer import optimize_inventory_item_query, optimize_inventory_category_query
 from app.schemas.imports import ItemImportRow, ImportResult, ImportError, get_item_template
 from app.services.csv_importer import parse_csv_file, validate_and_parse_rows, validate_headers, get_required_headers
+from app.services.text_normalizer import (
+    normalize_item_name,
+    normalize_description
+)
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 logger = logging.getLogger(__name__)
@@ -70,7 +74,7 @@ def create_category(
         )
     
     category = InventoryCategory(
-        name=category_data.name,
+        name=normalize_item_name(category_data.name),
         parent_id=category_data.parent_id
     )
     db.add(category)
@@ -94,7 +98,7 @@ def update_category(
     ).first()
     if existing:
         raise HTTPException(status_code=409, detail="Category with this name already exists")
-    category.name = category_data.name
+    category.name = normalize_item_name(category_data.name)
     category.parent_id = category_data.parent_id
     db.commit()
     db.refresh(category)

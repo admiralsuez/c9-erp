@@ -162,24 +162,11 @@ def list_items(
             query = query.filter(InventoryItem.stock_status == stock_status.lower())
     
     # Filter low stock items (uses threshold, excludes containers, uses available = current - reserved)
+    # Match dashboard logic: use is_active (not stock_status) and apply in Python due to arithmetic
     if low_stock:
-        query = query.filter(InventoryItem.is_container == False)
-
-        from app.models import Settings as SettingsModel
-        settings_row = db.query(SettingsModel).first()
-        default_threshold = float(settings_row.default_low_stock_threshold) if settings_row and settings_row.default_low_stock_threshold else 10
-        # available = current - reserved; compare to minimum_quantity or default threshold
         query = query.filter(
-            or_(
-                and_(
-                    InventoryItem.minimum_quantity > 0,
-                    (InventoryItem.current_quantity - InventoryItem.reserved_quantity) <= InventoryItem.minimum_quantity
-                ),
-                and_(
-                    or_(InventoryItem.minimum_quantity == 0, InventoryItem.minimum_quantity == None),
-                    (InventoryItem.current_quantity - InventoryItem.reserved_quantity) <= default_threshold
-                ),
-            )
+            InventoryItem.is_active == True,
+            InventoryItem.is_container == False
         )
     
     # Get total count before pagination
@@ -201,8 +188,24 @@ def list_items(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Unable to fetch inventory items at this time"
         )
-
-    total_pages = (total + size - 1) // size
+    
+    # Apply low_stock Python-level filtering (after pagination to exclude non-matching items)
+    if low_stock:
+        from app.models import Settings as SettingsModel
+        settings_row = db.query(SettingsModel).first()
+        default_threshold = float(settings_row.default_low_stock_threshold) if settings_row and settings_row.default_low_stock_threshold else 10
+        
+        # Filter items using same logic as dashboard: available = current - reserved
+        # Compare using < (strictly less than) not <=, matching dashboard behavior
+        filtered_items = []
+        for item in items:
+            available = float(item.current_quantity or 0) - float(item.reserved_quantity or 0)
+            min_qty = float(item.minimum_quantity) if item.minimum_quantity and item.minimum_quantity > 0 else default_threshold
+            if available < min_qty:  # Strictly less than, matching dashboard
+                filtered_items.append(item)
+        items = filtered_items
+    
+    total_pages = (total + size - 1) // size if total > 0 else 1
 
     # Serialize items — skip individual failures but don't mask DB errors
     items_data = []

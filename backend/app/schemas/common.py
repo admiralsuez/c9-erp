@@ -14,14 +14,14 @@ class SettingsResponse(BaseModel):
     company_gst: Optional[str] = None
     company_address: Optional[str] = None
     company_contact: Optional[str] = None
-    order_number_format: str
-    requisition_number_format: str
+    order_number_format: str = "ORD-{YYYY}-{SEQ}"
+    requisition_number_format: str = "REQ-{YYYY}-{SEQ}"
     pdf_header_text: Optional[str] = None
     pdf_footer_text: Optional[str] = None
-    default_low_stock_threshold: float
+    default_low_stock_threshold: float = 10.0
     ho_prefix: str = "HO"
     llf_prefix: str = "LLF"
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

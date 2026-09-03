@@ -130,8 +130,8 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Alembic migration failed (ignored for dev): {e}")
 
     # Auto-backup: run an immediate backup, then schedule periodic backups
-    from app.routers.backup import _backup_db, BACKUP_DIR, _IS_POSTGRES
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    from app.routers.backup import _backup_db, BACKUP_DIR, _IS_POSTGRES, _ensure_backup_dir
+    _ensure_backup_dir()
     _ext = ".sql" if _IS_POSTGRES else ".db"
     try:
         path = os.path.join(BACKUP_DIR, f"auto_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}{_ext}")
@@ -148,9 +148,9 @@ async def lifespan(app: FastAPI):
                 SHUTDOWN_EVENT.wait(6 * 3600)
                 if SHUTDOWN_EVENT.is_set():
                     break
-                from app.routers.backup import _backup_db, BACKUP_DIR as bdir, _IS_POSTGRES
+                from app.routers.backup import _backup_db, BACKUP_DIR as bdir, _IS_POSTGRES, _ensure_backup_dir
                 _ext = ".sql" if _IS_POSTGRES else ".db"
-                os.makedirs(bdir, exist_ok=True)
+                _ensure_backup_dir()
                 path = os.path.join(bdir, f"auto_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}{_ext}")
                 actual_path = _backup_db(path)
                 auto_files = sorted([f for f in os.listdir(bdir) if f.startswith("auto_")])

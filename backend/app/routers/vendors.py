@@ -161,9 +161,8 @@ def create_vendor(
 @cached("vendors:types", ttl_seconds=120)
 def list_vendor_types(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     vts = db.query(VendorType).order_by(VendorType.name).all()
-    # Serialize so the cached value is detached from the session and safe to
-    # return after the request lifecycle ends.
-    return [VendorTypeResponse.model_validate(vt).model_dump() for vt in vts]
+    # Return Pydantic objects, not dicts
+    return [VendorTypeResponse.model_validate(vt) for vt in vts]
 
 
 @router.post("/types", response_model=VendorTypeResponse, status_code=status.HTTP_201_CREATED)

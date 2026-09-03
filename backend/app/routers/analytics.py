@@ -14,7 +14,6 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
 @router.get("/dashboard/overview")
-@cached("analytics:dashboard:overview", ttl_seconds=30)
 def get_dashboard_overview(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("dashboard.view"))
@@ -22,10 +21,6 @@ def get_dashboard_overview(
     """
     Get complete dashboard overview with all metrics.
     Requires dashboard.view permission (Admin and Manager roles).
-
-    Cached for 30s in-process — the handler builds fresh plain-dict payloads
-    (no ORM references), so caching the result is safe; per-request staleness
-    at most 30s is acceptable for dashboard aggregates.
     """
     analytics = get_analytics_service(db)
     return analytics.get_dashboard_overview()

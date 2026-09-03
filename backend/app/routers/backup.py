@@ -20,6 +20,22 @@ router = APIRouter(prefix="/backup", tags=["Backup & Restore"])
 
 BACKUP_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "backups")
 
+
+def _ensure_backup_dir() -> None:
+    """Create the backups directory with owner-only permissions.
+
+    Backups contain a full database dump (users, orders, vendors, emails) —
+    they must not be world-readable. 0o700 keeps the dir private to the
+    backend process user; on non-POSIX platforms (Windows dev) the chmod is
+    a no-op.
+    """
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    try:
+        os.chmod(BACKUP_DIR, 0o700)
+    except OSError:
+        # Windows: chmod is mostly a no-op; ACLs handle permissions instead.
+        pass
+
 # Detect dialect
 _db_url = str(engine.url)
 _IS_POSTGRES = _db_url.startswith("postgresql")
@@ -104,7 +120,7 @@ def download_backup(
     db: Session = Depends(get_db),
 ):
     """Download a full database backup."""
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    _ensure_backup_dir()
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"erp_backup_{timestamp}.db"
@@ -136,7 +152,7 @@ async def restore_backup(
         raise HTTPException(status_code=400, detail="SQLite restore requires a .db file")
 
     suffix = ".sql" if _IS_POSTGRES else ".db"
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    _ensure_backup_dir()
 
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     try:
@@ -194,7 +210,7 @@ def list_backups(
     current_user: User = Depends(require_admin),
 ):
     """List available backup files."""
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    _ensure_backup_dir()
 
     _ext = ".sql" if _IS_POSTGRES else ".db"
     files = []
@@ -239,7 +255,7 @@ def email_backup(
 ):
     """Create a backup and email it as an attachment to specified recipients."""
     _ext = ".sql" if _IS_POSTGRES else ".db"
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    _ensure_backup_dir()
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"erp_backup_{timestamp}{_ext}"
@@ -291,7 +307,7 @@ def trigger_backup(
     current_user: User = Depends(require_admin),
 ):
     """Manually trigger an auto-backup now (same as periodic)."""
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    _ensure_backup_dir()
 
     _ext = ".sql" if _IS_POSTGRES else ".db"
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")

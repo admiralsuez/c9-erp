@@ -66,9 +66,13 @@ def _pg_env() -> dict:
 
 
 def _backup_db(destination: str) -> str:
-    """Backup the database — pg_dump for Postgres, sqlite3 backup for SQLite."""
+    """Backup the database — pg_dump for Postgres, sqlite3 backup for SQLite.
+    
+    Writes to /tmp first to avoid Docker volume permission issues, then moves to destination.
+    """
     if _IS_POSTGRES:
-        dump_path = destination.rsplit(".", 1)[0] + ".sql"
+        # Write to /tmp first (always writable), then move to final destination
+        temp_dump = os.path.join(tempfile.gettempdir(), f"pg_dump_{os.getpid()}.sql")
         cmd = [
             "pg_dump",
             "--host", _PG_HOST,
@@ -76,11 +80,23 @@ def _backup_db(destination: str) -> str:
             "--username", _PG_USER,
             "--dbname", _PG_DB,
             "--format", "plain",
-            "--file", dump_path,
+            "--file", temp_dump,
         ]
         result = subprocess.run(cmd, env=_pg_env(), capture_output=True, text=True, timeout=300)
         if result.returncode != 0:
+            if os.path.exists(temp_dump):
+                os.unlink(temp_dump)
             raise RuntimeError(f"pg_dump failed: {result.stderr.strip()}")
+        
+        # Move from /tmp to final destination
+        dump_path = destination.rsplit(".", 1)[0] + ".sql"
+        os.makedirs(os.path.dirname(dump_path), exist_ok=True)
+        try:
+            shutil.move(temp_dump, dump_path)
+        except Exception as e:
+            if os.path.exists(temp_dump):
+                os.unlink(temp_dump)
+            raise RuntimeError(f"Failed to move backup to {dump_path}: {str(e)}")
         return dump_path
     else:
         src = sqlite3.connect(DB_PATH)

@@ -31,7 +31,9 @@ def _ensure_backup_dir() -> None:
     """
     os.makedirs(BACKUP_DIR, exist_ok=True)
     try:
-        os.chmod(BACKUP_DIR, 0o700)
+        # Allow appuser to read/write/execute in backups directory
+        # Use 0o755 (rwxr-xr-x) to allow the appuser process to write backups
+        os.chmod(BACKUP_DIR, 0o755)
     except OSError:
         # Windows: chmod is mostly a no-op; ACLs handle permissions instead.
         pass

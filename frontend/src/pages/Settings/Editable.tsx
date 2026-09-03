@@ -951,7 +951,7 @@ export const AuditLogSection: React.FC = () => {
         />
       </div>
       {isLoading && <Loader className="w-5 h-5 animate-spin" />}
-      {error && <ErrorMessage message="Could not load audit logs. Admin access may be required." />}
+      {error && <ErrorMessage message="Could not load audit logs. Please ensure you have access to view system activity." />}
       <div className="space-y-2">
         {data?.items.map((log) => (
           <div key={log.id} className="p-3 bg-neutral-50 rounded-lg border border-neutral-100">
@@ -1011,7 +1011,7 @@ export const ChangelogSection: React.FC = () => {
         </div>
       )}
 
-      {error && <ErrorMessage message="Could not load changelog. Admin access may be required." />}
+      {error && <ErrorMessage message="Could not load changelog. Please try refreshing the page." />}
 
       {!isLoading && !error && Object.keys(grouped).length === 0 && (
         <div className="text-center py-12 text-neutral-500">
